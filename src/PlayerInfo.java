@@ -45,7 +45,7 @@ import com.google.protobuf.CodedInputStream;
 		}
 
 		public String toString(){
-			return String.format("    xuid:%-20d name:%-20s userID:%-10d guid:%-20s friendsID:%-10d friendsName:%s fakeplayer:%-5s ishltv:%-5s filesDownloaded:%d",
+			return String.format("    xuid:%-20d name:%-32s userID:%-10d guid:%-20s friendsID:%-10d friendsName:%s fakeplayer:%-5s ishltv:%-5s filesDownloaded:%d",
 					xUID, name, userID, gUID, friendsID, friendsName, fakePlayer, isHLTV, filesDownloaded);
 		}
 	}

@@ -11,7 +11,8 @@ public class GameInfo {
 	String duration;
 	String demoLength;
 	static final String nl = System.lineSeparator();
-	static final String scoreBoardFmt = "MatchID: %sDemo Length: %sGame Length: %sMode: %sWinner: %s%s%s";
+//	static final String scoreBoardFmt = "MatchID: %sDemo Length: %sGame Length: %sMode: %sWinner: %s%s%s";
+	static final String scoreBoardFmt = "%s | %s | %s | %s%s%s";
 	
 	void setGameInfo(float t, int id, int m, int w){
 		matchID = id;
@@ -20,9 +21,9 @@ public class GameInfo {
 		demoLength = String.format("%dm %02.0fs", mins, secs);
 		switch(m){
 		case 1: mode = "All Pick"; break;
-		case 2: mode = "Single Draft"; break;
-		case 3: mode = "Random Draft"; break;
-		case 4: mode = "Captains Mode"; break;
+		case 2: mode = "Captains Mode"; break;
+		case 3: mode = "Single Draft"; break;
+		case 4: mode = "Random Draft"; break;
 		}
 		if(w==2) winner = "The Radiant";
 		else winner = "The Dire";
@@ -61,11 +62,13 @@ public class GameInfo {
 	
 	void genScoreBoard(Player[] players){
 		scoreBoard = "";
-		for(Player p : players)
-			scoreBoard+=p+nl;
+		for(int i=0; i<players.length; i++){
+			if(i==5) scoreBoard += nl;
+			scoreBoard += players[i]+nl;
+		}
 	}
 	
 	public String toString(){
-		return String.format(scoreBoardFmt, matchID+nl, demoLength+nl, duration+nl, mode+nl, winner+nl, boardHeader, scoreBoard);
+		return String.format(scoreBoardFmt, matchID, duration, mode, winner+nl, boardHeader, scoreBoard);
 	}
 }

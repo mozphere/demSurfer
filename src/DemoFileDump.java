@@ -63,7 +63,7 @@ public class DemoFileDump{
 		combatSummary = "\nCOMBAT SUMMARY\n";
 		tmp = "";
 		prevID = 0;
-		heroGold = new float[12];
+		heroGold = new float[64];
 	}
 
 	ArrayList<String> getCombatLogNames(){
@@ -290,7 +290,7 @@ public class DemoFileDump{
 		switch(msg.getType()){
 		case CHAT_MESSAGE_AEGIS: combatEvents.add(new CombatEvent((short) msg.getPlayerid1())); break;
 		case CHAT_MESSAGE_HERO_KILL: kdHeroList.add(msg); break;
-		case CHAT_MESSAGE_REPORT_REMINDER:gameInfo.setStartTime(lastGameTime); break;
+//		case CHAT_MESSAGE_REPORT_REMINDER:gameInfo.setStartTime(lastGameTime); break;
 		}
 		return msg;
 	}
@@ -298,7 +298,7 @@ public class DemoFileDump{
 	Message handleUnitEvent(CDOTAUserMsg_UnitEvent msg){
 		switch(msg.getMsgType()){
 		case DOTA_UNIT_SPEECH:
-//			if(msg.getSpeech().getResponse().contains("battle_begin")) gameInfo.setStartTime(lastGameTime);
+			if(msg.getSpeech().getResponse().contains("battle_begin")) gameInfo.setStartTime(lastGameTime);
 			if(msg.getSpeech().getResponse().contains("victory")) gameInfo.setEndTime(combatEvents.get(combatEvents.size()-1).timeStamp);
 			break;
 		}
@@ -404,30 +404,12 @@ public class DemoFileDump{
 						index += playerInfo.name.equals("SourceTV") ? 2 : 1;
 						playerInfo.index = index;
 						userInfo.put(playerInfo.name, playerInfo);
-						
 					}
 					break;
 				}
 		}
 		reincarnation = modifierNames.indexOf("modifier_skeleton_king_reincarnation");
 	}
-	
-	   public static void printBytes(byte[] array, String name) {
-		      for (int k = 0; k < array.length; k++) {
-		         System.out.println(name + "[" + k + "] = " + "0x" +
-		            byteToHex(array[k]));
-		      }
-		   }
-	
-	   static public String byteToHex(byte b) {
-		      // Returns hex String representation of byte b
-		      char hexDigit[] = {
-		         '0', '1', '2', '3', '4', '5', '6', '7',
-		         '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
-		      };
-		      char[] array = { hexDigit[(b >> 4) & 0x0f], hexDigit[b & 0x0f] };
-		      return new String(array);
-		   }
 
 	void handleGameInfo(CDemoFileInfo msg) throws UnsupportedEncodingException{
 		short i = 0;

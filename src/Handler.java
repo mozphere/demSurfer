@@ -26,6 +26,10 @@ enum Type {
 	DAMAGE, HEALING, MODIFIER_GAIN, MODIFIER_LOSS, DEATH, AEGIS
 }
 
+/**
+ * @author mozphere
+ *
+ */
 public class Handler{
 
 	static void tstSnappy() throws UnsupportedEncodingException, IOException{
@@ -69,35 +73,50 @@ public class Handler{
 
 	static Type[] types = Type.values();
 	static DemoFileDump demoDump;
+	static DataOutputStream file;
+	static final DataOutputStream out = new DataOutputStream(System.out);
+	static final String nl = System.lineSeparator();
+	static int n = 0;
 	public static void main(String[] args) throws IOException{
 		//		tstSnappy();
 		//		printDemo();
 		//		cis();
 
-		Stopwatch s = new Stopwatch();
-		demoDump = new DemoFileDump();
+//		args = new String[1];
+//		args[0] = "19461867.dem";
 
-		args = new String[2];
-		args[0] = "21907249.dem";
-
-		if(args.length < 1){
+		String fileName = "ERROR";
+		if(args.length==0){
 			System.out.println("Usage: " + Handler.class.getSimpleName() + ".jar filename.dem");
 			System.exit(0);
 		}
-		s.start();
-		if(demoDump.open(args[0]))
-			demoDump.doDump();
-		s.stop();
+		else if(args.length==1)
+			fileName = args[0];
+		else
+			fileName = "results";
+		
+		file = new DataOutputStream(new FileOutputStream(fileName+".txt", true));
+		for(String arg : args){
+			Stopwatch s = new Stopwatch();
+			demoDump = new DemoFileDump();
+			
+			s.start();
+			if(demoDump.open(arg))
+				demoDump.doDump();
+			s.stop();
 
-		double dumpTime = s.time();
+			double dumpTime = s.time();
 
-		s.start();
-		combatLog();
-		s.stop();
-		//				kd();
-		double surfTime = s.time();
-		System.out.println("Dump Time: "+dumpTime);
-		System.out.println("Surf Time: "+surfTime);
+			s.start();
+			combatLog();
+			s.stop();
+			//				kd();
+			double surfTime = s.time();
+			System.out.println("Dump Time: "+dumpTime);
+			System.out.println("Surf Time: "+surfTime);
+//			out.write(("Dump Time: "+dumpTime).getBytes("UTF-8"));
+//			out.write(("Surf Time: "+surfTime).getBytes("UTF-8"));
+		}
 	}
 
 	private static void kd(){
@@ -241,8 +260,8 @@ public class Handler{
 							}
 						}							
 						else{
-							System.out.println(combatLogNames.get(combatEvent.attackerName)+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
-							System.out.println(combatEvent);
+//							System.out.println(combatLogNames.get(combatEvent.attackerName)+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+//							System.out.println(combatEvent);
 						}
 
 						boolean skRessurection = target.hero.equals("Skeleton King") && demoDump.resurrectionList.contains( (int)(combatEvent.timeStamp)+3 );
@@ -260,14 +279,15 @@ public class Handler{
 									teams[iAttacker].assists++;
 									if(teams[iAttacker].hero.equals("Vengefulspirit")){
 										//System.out.print(teams[iAttacker].hero+": ");
-										System.out.println(combatLogNames.get(combatEvent.attackerName)+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+//										System.out.println(combatLogNames.get(combatEvent.attackerName)+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 									}
 								}
 							}
 						}
-						else
-							System.out.println(combatLogNames.get(combatEvent.attackerName)+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
-
+						else{
+//							System.out.println(combatLogNames.get(combatEvent.attackerName)+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+						}
+						
 						if(skRessurection){
 							deaths--; 
 							target.deaths--;
@@ -299,12 +319,11 @@ public class Handler{
 
 		//		RandomAccessFile file = new RandomAccessFile("results.txt", "rws");
 		//		file.writeUTF(demoDump.getGameInfo().toString());
-		DataOutputStream file = new DataOutputStream(new FileOutputStream("results.txt"));
-		file.write(demoDump.getGameInfo().toString().getBytes("UTF-8"));
 
-		DataOutputStream out = new DataOutputStream(System.out);
+		file.write((nl+"-------------------------"+(++n)+"-------------------------"+nl+nl+demoDump.getGameInfo()).getBytes("UTF-8"));
+
 		out.write(demoDump.getGameInfo().toString().getBytes("UTF-8"));
-		System.out.println();
+//		System.out.println("\n");
 		//		out.close();
 	}
 
