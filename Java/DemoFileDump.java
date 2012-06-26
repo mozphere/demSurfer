@@ -57,7 +57,6 @@ public class DemoFileDump{
 		resurrectionList = new HashSet<Integer>();
 		userInfo = new HashMap<String, PlayerInfo>();
 		players = new HashMap<Short, Player>();
-		teams = new Player[10];
 		kdHeroList =  new ArrayList<CDOTAUserMsg_ChatEvent>();
 		gameInfo = new GameInfo();
 		combatSummary = "\nCOMBAT SUMMARY\n";
@@ -288,7 +287,7 @@ public class DemoFileDump{
 
 	Message handleChatMsg(CDOTAUserMsg_ChatEvent msg){
 		switch(msg.getType()){
-		case CHAT_MESSAGE_AEGIS: combatEvents.add(new CombatEvent((short) msg.getPlayerid1())); break;
+		case CHAT_MESSAGE_AEGIS: combatEvents.add(new CombatEvent((short) msg.getPlayerid1(), combatEvents.get(combatEvents.size()-1).timeStamp)); break;
 		case CHAT_MESSAGE_HERO_KILL: kdHeroList.add(msg); break;
 //		case CHAT_MESSAGE_REPORT_REMINDER:gameInfo.setStartTime(lastGameTime); break;
 		}
@@ -420,6 +419,7 @@ public class DemoFileDump{
 		short heroIndx;
 
 		CDotaGameInfo demoInfo = msg.getGameInfo().getDota();
+		teams = new Player[demoInfo.getPlayerInfoCount()];
 		
 		for( CPlayerInfo pi : demoInfo.getPlayerInfoList() ){
 			String heroName = pi.getHeroName();
@@ -447,11 +447,10 @@ public class DemoFileDump{
 			p.slotID = i;
 			p.team = i<5 ? "Radiant" : "Dire";
 //System.out.println(p.gold/(gameInfo.gameLength/60f));
-
 			players.put(heroIndx, p);			
 			teams[i++] = p;
 		}
-		for(Player p: teams) p.setStrFmt(pWidth, hWidth);
+		for(Player p: teams)if(p!=null) p.setStrFmt(pWidth, hWidth);
 		gameInfo.setGameInfo(msg.getPlaybackTime(), demoInfo.getMatchId(), demoInfo.getGameMode(), demoInfo.getGameWinner());
 		gameInfo.fmtHeader(pWidth, hWidth);
 	}

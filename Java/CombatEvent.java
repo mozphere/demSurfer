@@ -12,9 +12,10 @@
 		short targetSourceName; 
 		
 		short playerId;
-		CombatEvent(short id){
+		CombatEvent(short id, float time){
 			type = 5; //AEGIS
 			playerId = id;
+			timeStamp = time;
 		}
 
 		CombatEvent(Object[] field){

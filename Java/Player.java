@@ -1,3 +1,5 @@
+import java.util.HashSet;
+
 	class Player{
 		String gUID;
 		String name;
@@ -6,11 +8,12 @@
 		short deaths;
 		short assists;
 		float gold;
-		boolean aegis;
+		float aegisTimeStamp = -1;
 		short slotID;
 		String team;
 		String strFormat;
-		CombatEvent[] deathAssist = new CombatEvent[10];
+		CombatEvent[] damagedBy = new CombatEvent[10];
+		HashSet<Short> minions = new HashSet<Short>();
 		
 		void setStrFmt(byte pWidth, byte hWidth){
 			final String SPACE = "%"+2+"s|"+"%"+2+"s";

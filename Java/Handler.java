@@ -83,7 +83,7 @@ public class Handler{
 		//		cis();
 
 //		args = new String[1];
-//		args[0] = "19461867.dem";
+//		args[0] = "19472796.dem";
 
 		String fileName = "ERROR";
 		if(args.length==0){
@@ -94,12 +94,12 @@ public class Handler{
 			fileName = args[0];
 		else
 			fileName = "results";
-		
+
 		file = new DataOutputStream(new FileOutputStream(fileName+".txt", true));
 		for(String arg : args){
 			Stopwatch s = new Stopwatch();
 			demoDump = new DemoFileDump();
-			
+
 			s.start();
 			if(demoDump.open(arg))
 				demoDump.doDump();
@@ -114,8 +114,8 @@ public class Handler{
 			double surfTime = s.time();
 			System.out.println("Dump Time: "+dumpTime);
 			System.out.println("Surf Time: "+surfTime);
-//			out.write(("Dump Time: "+dumpTime).getBytes("UTF-8"));
-//			out.write(("Surf Time: "+surfTime).getBytes("UTF-8"));
+			file.write((nl+"Dump Time: "+dumpTime+nl).getBytes("UTF-8"));
+			file.write(("Surf Time: "+surfTime+nl).getBytes("UTF-8"));
 		}
 	}
 
@@ -142,23 +142,35 @@ public class Handler{
 	}
 
 	private static void combatLog() throws IOException{
-		ArrayList<String> combatLogNames = demoDump.getCombatLogNames();
-		HashMap<Short, Player> players = demoDump.getPlayers();
-		Player[] teams = demoDump.teams;
+		final ArrayList<String> combatLogNames = demoDump.getCombatLogNames();
+		final HashMap<Short, Player> players = demoDump.getPlayers();
+		final Player[] teams = demoDump.teams;
 		int heroTargets = 0;
 		int deaths = 0;
 		int kills = 0;
 		final int ASSIST_TLIMIT = 20;
-		final int holyPersuasion = combatLogNames.indexOf("modifier_chen_holy_persuasion");
-		int trollWarlord = combatLogNames.indexOf("npc_dota_neutral_dark_troll_warlord");
-		short skeletonWarrior = (short) combatLogNames.indexOf("npc_dota_dark_troll_warlord_skeleton_warrior");
-		short cheni = (short) combatLogNames.indexOf("npc_dota_hero_chen");
-		Player chen = players.get(cheni);
-		Player warlock = players.get((short)combatLogNames.indexOf("npc_dota_hero_warlock"));
-		Player enchantress = players.get((short)combatLogNames.indexOf("npc_dota_hero_enchantress"));
-		final int enchant = combatLogNames.indexOf("modifier_enchantress_enchant");
-		HashSet<Short> chensMinions = new HashSet<Short>();
-		HashSet<Short> enchantsMinions = new HashSet<Short>();
+
+		final short helmOfDominator;
+		final short trollWarlord = (short) combatLogNames.indexOf("npc_dota_neutral_dark_troll_warlord");
+		final short skeletonWarrior = (short) combatLogNames.indexOf("npc_dota_dark_troll_warlord_skeleton_warrior");
+		final short enragedWildkin = (short) combatLogNames.indexOf("npc_dota_neutral_enraged_wildkin");
+		final short tornado = (short) combatLogNames.indexOf("npc_dota_enraged_wildkin_tornado");
+		final Player chen = players.get((short) combatLogNames.indexOf("npc_dota_hero_chen"));
+		final short holyPersuasion = (short) combatLogNames.indexOf("modifier_chen_holy_persuasion");
+		final Player enchantress = players.get((short)combatLogNames.indexOf("npc_dota_hero_enchantress"));
+		final short enchant = (short) combatLogNames.indexOf("modifier_enchantress_enchant");
+		final Player brewmaster = players.get((short)combatLogNames.indexOf("npc_dota_hero_brewmaster"));
+		final Player warlock = players.get((short)combatLogNames.indexOf("npc_dota_hero_warlock"));
+		final Player broodmother = players.get((short)combatLogNames.indexOf("npc_dota_hero_broodmother"));
+		final Player venomancer = players.get((short)combatLogNames.indexOf("npc_dota_hero_venomancer"));
+		final Player enigma = players.get((short)combatLogNames.indexOf("npc_dota_hero_enigma"));
+		final Player beastmaster = players.get((short)combatLogNames.indexOf("npc_dota_hero_beastmaster"));
+		final Player treantProtector;
+		final Player Morphling;
+		//druid?
+		//weaver?
+		//furion?
+		//ivoker
 
 
 		System.out.println("\nCombat Log Names: "+combatLogNames.size());
@@ -167,54 +179,97 @@ public class Handler{
 		for(CombatEvent combatEvent : demoDump.getCombatEvents()){
 			Player target = players.get(combatEvent.targetName);
 			Player attacker = players.get(combatEvent.attackerSourceName);
+			String attackerName = combatLogNames.get(combatEvent.attackerName);
+			
+			boolean isNeutral = attackerName.contains("creep_neutral");
+			boolean isCreep = attackerName.contains("creep_g") || attackerName.contains("creep_b") || attackerName.contains("siege");
+			boolean isTower = attackerName.contains("tower");
+			boolean isGolem = attackerName.contains("warlock_golem");
+			boolean isPanda = attackerName.contains("brewmaster");
+			boolean isSpider = attackerName.contains("broodmother_spider");
+			boolean isPlagueWard = attackerName.contains("plague_ward");
+			boolean isEidolon = attackerName.contains("eidolon");
+			boolean isBoar = attackerName.contains("boar");
 
 			if(target!=null && attacker!=null) denied = attacker.team.equals(target.team);
-			// && players.get(combatEvent.attackerName)!=null
 			switch(types[combatEvent.type]){
 			case DAMAGE: //if(attacker!=null && target!=null)heroTargets++; 
 				if(target!=null && !combatEvent.targetIllusion){
+
 					if(attacker!=null && !denied){								
 						if(combatEvent.health!=0)
-							target.deathAssist[attacker.slotID]=combatEvent;
+							target.damagedBy[attacker.slotID]=combatEvent;
 					}
-					else if(chen!=null && chensMinions.contains(combatEvent.attackerName)){
+					else if(chen!=null && chen.minions.contains(combatEvent.attackerName)){
 						if(combatEvent.health!=0)
-							target.deathAssist[chen.slotID]=combatEvent;
+							target.damagedBy[chen.slotID]=combatEvent;
 						denied = chen.team.equals(target.team);
 					}
-					else if(warlock!=null && combatLogNames.get(combatEvent.attackerName).contains("warlock_golem")){
+					else if(enchantress!=null && enchantress.minions.contains(combatEvent.attackerName)){
 						if(combatEvent.health!=0)
-							target.deathAssist[warlock.slotID]=combatEvent;
-						denied = warlock.team.equals(target.team);
-					}
-					else if(enchantress!=null && enchantsMinions.contains(combatEvent.attackerName)){
-						if(combatEvent.health!=0)
-							target.deathAssist[enchantress.slotID]=combatEvent;
+							target.damagedBy[enchantress.slotID]=combatEvent;
 						denied = enchantress.team.equals(target.team);
 					}
-					else if(combatLogNames.get(combatEvent.attackerName).contains("tower")){
+					else if(isGolem){
+						if(combatEvent.health!=0)
+							target.damagedBy[warlock.slotID]=combatEvent;
+						denied = warlock.team.equals(target.team);
+					}
+					else if(isPanda){
+						if(combatEvent.health!=0)
+							target.damagedBy[brewmaster.slotID]=combatEvent;
+						denied = brewmaster.team.equals(target.team);
+					}
+					else if(isSpider){
+						if(combatEvent.health!=0)
+							target.damagedBy[broodmother.slotID]=combatEvent;
+						denied = broodmother.team.equals(target.team);
+					}
+					else if(isPlagueWard){
+						if(combatEvent.health!=0)
+							target.damagedBy[venomancer.slotID]=combatEvent;
+						denied = venomancer.team.equals(target.team);
+					}
+					else if(isEidolon){
+						if(combatEvent.health!=0)
+							target.damagedBy[enigma.slotID]=combatEvent;
+						denied = enigma.team.equals(target.team);
+					}
+					else if(isBoar){
+						if(combatEvent.health!=0)
+							target.damagedBy[beastmaster.slotID]=combatEvent;
+						denied = beastmaster.team.equals(target.team);
+					}
+					else if(isTower || isCreep){
 						denied = false;
+					}
+					else{
+//						System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+//						System.out.println(combatEvent);
 					}
 				}
 
 				break;
 			case MODIFIER_GAIN: 
 				if(combatEvent.inflictorName==holyPersuasion){
-					chensMinions.add(combatEvent.targetName);
+					chen.minions.add(combatEvent.targetName);
 					if(combatEvent.targetName==trollWarlord)
-						chensMinions.add(skeletonWarrior);
+						chen.minions.add(skeletonWarrior);
+					if(combatEvent.targetName==enragedWildkin)
+						chen.minions.add(tornado);
 
 				}
 				if(combatEvent.inflictorName==enchant){
-					enchantsMinions.add(combatEvent.targetName);
+					enchantress.minions.add(combatEvent.targetName);
 					if(combatEvent.targetName==trollWarlord)
-						enchantsMinions.add(skeletonWarrior);
-
+						enchantress.minions.add(skeletonWarrior);
+					if(combatEvent.targetName==enragedWildkin)
+						enchantress.minions.add(tornado);
 				}
 				break;
 			case DEATH:	
 				if(target!=null){ //target is a hero
-					if(target.aegis==false){
+					if(target.aegisTimeStamp==-1 || (combatEvent.timeStamp - target.aegisTimeStamp) > 600f){ //10mins *60
 						deaths++; 
 						target.deaths++;
 
@@ -226,68 +281,90 @@ public class Handler{
 						if(attacker!=null && !denied){//attacker is a hero
 							kills++;
 							attacker.kills++;
-							target.deathAssist[attacker.slotID]=null;
+							target.damagedBy[attacker.slotID]=null;
 						}
-						else if(chen!=null && chensMinions.contains(combatEvent.attackerName)  && !denied){
+						else if(chen!=null && chen.minions.contains(combatEvent.attackerName)  && !denied){
 							kills++;
 							chen.kills++;
-							target.deathAssist[chen.slotID]=null;
+							target.damagedBy[chen.slotID]=null;
 						}
-						else if(enchantress!=null && enchantsMinions.contains(combatEvent.attackerName)  && !denied){
+						else if(enchantress!=null && enchantress.minions.contains(combatEvent.attackerName)  && !denied){
 							kills++;
 							enchantress.kills++;
-							target.deathAssist[enchantress.slotID]=null;
+							target.damagedBy[enchantress.slotID]=null;
 						}
-						else if(warlock!=null && combatLogNames.get(combatEvent.attackerName).contains("warlock_golem")  && !denied){
+						else if(isGolem  && !denied){
 							kills++;
 							warlock.kills++;
-							target.deathAssist[warlock.slotID]=null;
-						}	
-						else if(combatLogNames.get(combatEvent.attackerName).contains("tower")){
+							target.damagedBy[warlock.slotID]=null;
+						}
+						else if(isPanda  && !denied){
+							kills++;
+							brewmaster.kills++;
+							target.damagedBy[brewmaster.slotID]=null;
+
+						}
+						else if(isSpider && !denied){
+							kills++;
+							broodmother.kills++;
+							target.damagedBy[broodmother.slotID]=null;
+						}
+						else if(isPlagueWard && !denied){
+							kills++;
+							venomancer.kills++;
+							target.damagedBy[venomancer.slotID]=null;
+						}
+						else if(isEidolon && !denied){
+							kills++;
+							enigma.kills++;
+							target.damagedBy[enigma.slotID]=null;
+						}
+						else if(isBoar && !denied){
+							kills++;
+							beastmaster.kills++;
+							target.damagedBy[beastmaster.slotID]=null;
+						}
+						else if(isTower || isCreep){
 							int start, end, i = 0, assistsCount=0;
 							if(target.slotID < 5){ start=5; end=10;} else {start=0; end=5;}
 							for(int iAttacker=start; iAttacker<end; iAttacker++){
-								CombatEvent[] assistEvent = target.deathAssist;
+								CombatEvent[] assistEvent = target.damagedBy;
 								if(assistEvent[iAttacker]!=null && combatEvent.timeStamp - assistEvent[iAttacker].timeStamp<=ASSIST_TLIMIT){
 									assistsCount++;
 									i = iAttacker;
 								}
 							}
-							if(assistsCount==1){
+							if(assistsCount==1){								
 								kills++;
 								teams[i].kills++;
-								target.deathAssist[i]=null;
+								target.damagedBy[i]=null;
 							}
 						}							
-						else{
-//							System.out.println(combatLogNames.get(combatEvent.attackerName)+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
-//							System.out.println(combatEvent);
+						else if(denied){
+							//grant deny achievement
 						}
-
-						boolean skRessurection = target.hero.equals("Skeleton King") && demoDump.resurrectionList.contains( (int)(combatEvent.timeStamp)+3 );
-						boolean isNeutral = combatLogNames.get(combatEvent.attackerName).contains("neutral");
-						boolean isCreep = combatLogNames.get(combatEvent.attackerName).contains("creep"); //!"npc_dota_creep_neutral"?
-						boolean isGolem = combatLogNames.get(combatEvent.attackerName).contains("warlock_golem");
-						boolean isTower = combatLogNames.get(combatEvent.attackerName).contains("tower");
+						else{// should be neutral --> hero
+							System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+							System.out.println(combatEvent);
+						}
 
 						//if(!isCreep && !isTower)
 						if(!denied){
 							int start, end;
 							if(target.slotID < 5){ start=5; end=10;} else {start=0; end=5;}
 							for(int iAttacker=start; iAttacker<end; iAttacker++){
-								if(target.deathAssist[iAttacker]!=null && combatEvent.timeStamp - target.deathAssist[iAttacker].timeStamp<=ASSIST_TLIMIT){
+								if(target.damagedBy[iAttacker]!=null && combatEvent.timeStamp - target.damagedBy[iAttacker].timeStamp<=ASSIST_TLIMIT){
 									teams[iAttacker].assists++;
-									if(teams[iAttacker].hero.equals("Vengefulspirit")){
+									if(teams[iAttacker].hero.equals("Enigma")){
 										//System.out.print(teams[iAttacker].hero+": ");
-//										System.out.println(combatLogNames.get(combatEvent.attackerName)+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+//System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 									}
 								}
 							}
 						}
-						else{
-//							System.out.println(combatLogNames.get(combatEvent.attackerName)+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
-						}
 						
+						boolean skRessurection = target.hero.equals("Skeleton King") && demoDump.resurrectionList.contains( (int)(combatEvent.timeStamp)+3 );
+
 						if(skRessurection){
 							deaths--; 
 							target.deaths--;
@@ -297,15 +374,16 @@ public class Handler{
 							int begin, stop;
 							if(target.slotID < 5){ begin=5; stop=10;} else {begin=0; stop=5;}
 							for(int iAttacker=begin; iAttacker<stop; iAttacker++){
-								if(target.deathAssist[iAttacker]!=null && combatEvent.timeStamp - target.deathAssist[iAttacker].timeStamp<=ASSIST_TLIMIT)
+								if(target.damagedBy[iAttacker]!=null && combatEvent.timeStamp - target.damagedBy[iAttacker].timeStamp<=ASSIST_TLIMIT)
 									teams[iAttacker].assists--;
 							}
 						}
 					}
 					else
-						target.aegis = false;
+						target.aegisTimeStamp = -1;
+					
 				} break;
-			case AEGIS: teams[combatEvent.playerId].aegis = true; break;
+			case AEGIS: teams[combatEvent.playerId].aegisTimeStamp = combatEvent.timeStamp; break;
 			}
 		}
 
@@ -323,7 +401,7 @@ public class Handler{
 		file.write((nl+"-------------------------"+(++n)+"-------------------------"+nl+nl+demoDump.getGameInfo()).getBytes("UTF-8"));
 
 		out.write(demoDump.getGameInfo().toString().getBytes("UTF-8"));
-//		System.out.println("\n");
+		//		System.out.println("\n");
 		//		out.close();
 	}
 
