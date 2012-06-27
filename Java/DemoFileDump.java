@@ -289,6 +289,8 @@ public class DemoFileDump{
 		switch(msg.getType()){
 		case CHAT_MESSAGE_AEGIS: combatEvents.add(new CombatEvent((short) msg.getPlayerid1(), combatEvents.get(combatEvents.size()-1).timeStamp)); break;
 		case CHAT_MESSAGE_HERO_KILL: kdHeroList.add(msg); break;
+		case CHAT_MESSAGE_STREAK_KILL: kdHeroList.add(msg); break;
+		case CHAT_MESSAGE_HERO_DENY: kdHeroList.add(msg); break;
 //		case CHAT_MESSAGE_REPORT_REMINDER:gameInfo.setStartTime(lastGameTime); break;
 		}
 		return msg;
@@ -437,8 +439,9 @@ public class DemoFileDump{
 			tmpWidth = (byte) playerName.length();
 			if(tmpWidth>pWidth) pWidth = tmpWidth;
 			
-//			System.out.println(i+"=>"+user.index);
+
 			PlayerInfo user = userInfo.get(playerName);
+//			System.out.println(i+heroName+" => "+user.index+user.name);
 			Player p = new Player();
 			p.gUID = user!=null ? user.gUID : "";
 			p.name = playerName;

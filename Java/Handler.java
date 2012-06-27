@@ -110,7 +110,7 @@ public class Handler{
 			s.start();
 			combatLog();
 			s.stop();
-			//				kd();
+//			kd();
 			double surfTime = s.time();
 			System.out.println("Dump Time: "+dumpTime);
 			System.out.println("Surf Time: "+surfTime);
@@ -121,24 +121,46 @@ public class Handler{
 
 	private static void kd(){
 		Player[] teams = demoDump.teams;
-		for(CDOTAUserMsg_ChatEvent heroKill : demoDump.kdHeroList){
-			teams[heroKill.getPlayerid1()].deaths++;
+		int lastTarget = -1;
+		String type = "";
 
-			if(heroKill.getPlayerid3()==-1 && heroKill.getValue()!=0)
-				teams[heroKill.getPlayerid2()].kills++;
-			else{
-				System.out.println(heroKill);
-				if(heroKill.getPlayerid2()!=-1) teams[heroKill.getPlayerid2()].assists++;
-				if(heroKill.getPlayerid3()!=-1) teams[heroKill.getPlayerid3()].assists++;
-				if(heroKill.getPlayerid4()!=-1) teams[heroKill.getPlayerid4()].assists++;
-				if(heroKill.getPlayerid5()!=-1) teams[heroKill.getPlayerid5()].assists++;
-				if(heroKill.getPlayerid6()!=-1) teams[heroKill.getPlayerid6()].assists++;
+		for(CDOTAUserMsg_ChatEvent heroKill : demoDump.kdHeroList){
+			type = heroKill.getType().toString();
+			//			if(teams[heroKill.getPlayerid2()].hero.equals("Sven"))
+			//				System.out.println(teams[heroKill.getPlayerid2()].hero+" -> "+teams[heroKill.getPlayerid1()].hero);
+
+			if(type.equals("CHAT_MESSAGE_HERO_KILL")){
+				if(heroKill.getPlayerid3()==-1){
+					if(heroKill.getValue()!=0){
+						teams[heroKill.getPlayerid2()].kills++;
+						teams[heroKill.getPlayerid1()].deaths++;
+						lastTarget = heroKill.getPlayerid1();	
+					}
+					else{//neutral kills hero
+						teams[heroKill.getPlayerid1()].deaths++;
+					}
+				}
+				else{//should be creep/tower kill and gold split among assists
+					//					System.out.println(heroKill);
+					teams[heroKill.getPlayerid1()].deaths++;
+					if(heroKill.getPlayerid2()!=-1) teams[heroKill.getPlayerid2()].assists++;
+					if(heroKill.getPlayerid3()!=-1) teams[heroKill.getPlayerid3()].assists++;
+					if(heroKill.getPlayerid4()!=-1) teams[heroKill.getPlayerid4()].assists++;
+					if(heroKill.getPlayerid5()!=-1) teams[heroKill.getPlayerid5()].assists++;
+					if(heroKill.getPlayerid6()!=-1) teams[heroKill.getPlayerid6()].assists++;
+				}
 			}
+			else if(type.equals("CHAT_MESSAGE_STREAK_KILL") && heroKill.getPlayerid4()!=lastTarget){
+				teams[heroKill.getPlayerid1()].kills++;
+				teams[heroKill.getPlayerid4()].deaths++;				
+			}
+			else if(type.equals("CHAT_MESSAGE_HERO_DENY"))
+				teams[heroKill.getPlayerid1()].deaths++;
+				//teams[heroKill.getPlayerid2()] deny achievement
 		}
 
 		demoDump.getGameInfo().genScoreBoard(teams);
 		System.out.println(demoDump.getGameInfo());
-
 	}
 
 	private static void combatLog() throws IOException{
@@ -180,7 +202,7 @@ public class Handler{
 			Player target = players.get(combatEvent.targetName);
 			Player attacker = players.get(combatEvent.attackerSourceName);
 			String attackerName = combatLogNames.get(combatEvent.attackerName);
-			
+
 			boolean isNeutral = attackerName.contains("creep_neutral");
 			boolean isCreep = attackerName.contains("creep_g") || attackerName.contains("creep_b") || attackerName.contains("siege");
 			boolean isTower = attackerName.contains("tower");
@@ -244,8 +266,8 @@ public class Handler{
 						denied = false;
 					}
 					else{
-//						System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
-//						System.out.println(combatEvent);
+						//						System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+						//						System.out.println(combatEvent);
 					}
 				}
 
@@ -273,12 +295,21 @@ public class Handler{
 						deaths++; 
 						target.deaths++;
 
+						if(target.hero.equals("Lone Druid")){
+							System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp);
+							//System.out.println(combatEvent);
+						}
+
 						if(combatEvent.targetIllusion){
 							System.out.println("illusions deaths shouldn't count towards a hero's kills or deaths");
 							System.exit(0);
 						}
 
 						if(attacker!=null && !denied){//attacker is a hero
+							//							if(attacker.hero.equals("Sven")){
+							//								System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp);
+							//								System.out.println(combatEvent);
+							//							}
 							kills++;
 							attacker.kills++;
 							target.damagedBy[attacker.slotID]=null;
@@ -344,8 +375,8 @@ public class Handler{
 							//grant deny achievement
 						}
 						else{// should be neutral --> hero
-							System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
-							System.out.println(combatEvent);
+							//							System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+							//							System.out.println(combatEvent);
 						}
 
 						//if(!isCreep && !isTower)
@@ -357,12 +388,12 @@ public class Handler{
 									teams[iAttacker].assists++;
 									if(teams[iAttacker].hero.equals("Enigma")){
 										//System.out.print(teams[iAttacker].hero+": ");
-//System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+										//System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 									}
 								}
 							}
 						}
-						
+
 						boolean skRessurection = target.hero.equals("Skeleton King") && demoDump.resurrectionList.contains( (int)(combatEvent.timeStamp)+3 );
 
 						if(skRessurection){
@@ -381,7 +412,7 @@ public class Handler{
 					}
 					else
 						target.aegisTimeStamp = -1;
-					
+
 				} break;
 			case AEGIS: teams[combatEvent.playerId].aegisTimeStamp = combatEvent.timeStamp; break;
 			}
