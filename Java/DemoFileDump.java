@@ -38,16 +38,17 @@ public class DemoFileDump{
 	public HashSet<Integer> resurrectionList;
 	private HashMap<String, PlayerInfo> userInfo;
 	private HashMap<Short, Player> players;
-	public Player[] teams;
+	private Player[] teams;
 	private int m_nFrameNumber;
-	public ArrayList<CDOTAUserMsg_ChatEvent> kdHeroList;
-	int reincarnation;
+	private ArrayList<CDOTAUserMsg_ChatEvent> heroKillMsgs;
+	private int reincarnation;
 	private GameInfo gameInfo;
 	private String combatSummary;
 	private String tmp;
-	private int prevID;
+	private short prevID;
 	private float[] heroGold;
 	private float lastGameTime;
+	private HashMap<String, Short> heroList;
 
 	DemoFileDump(){
 		m_demoFile = new DemoFile();
@@ -57,12 +58,13 @@ public class DemoFileDump{
 		resurrectionList = new HashSet<Integer>();
 		userInfo = new HashMap<String, PlayerInfo>();
 		players = new HashMap<Short, Player>();
-		kdHeroList =  new ArrayList<CDOTAUserMsg_ChatEvent>();
+		heroKillMsgs =  new ArrayList<CDOTAUserMsg_ChatEvent>();
 		gameInfo = new GameInfo();
 		combatSummary = "\nCOMBAT SUMMARY\n";
 		tmp = "";
 		prevID = 0;
 		heroGold = new float[64];
+		heroList = new HashMap<String, Short>();
 	}
 
 	ArrayList<String> getCombatLogNames(){
@@ -77,8 +79,21 @@ public class DemoFileDump{
 		return players;
 	}
 
-	GameInfo getGameInfo(){
-		return gameInfo;
+	Player[] getTeams(){
+		return teams;
+	}
+
+	String getGameInfo(){
+		gameInfo.genScoreBoard(teams);
+		return gameInfo.toString();
+	}
+
+	ArrayList<CDOTAUserMsg_ChatEvent> getHeroKillMsgs(){
+		return heroKillMsgs;
+	}
+
+	HashMap<String, Short> getHeroList(){
+		return heroList;
 	}
 
 	boolean open(final String filename) throws IOException{
@@ -288,10 +303,10 @@ public class DemoFileDump{
 	Message handleChatMsg(CDOTAUserMsg_ChatEvent msg){
 		switch(msg.getType()){
 		case CHAT_MESSAGE_AEGIS: combatEvents.add(new CombatEvent((short) msg.getPlayerid1(), combatEvents.get(combatEvents.size()-1).timeStamp)); break;
-		case CHAT_MESSAGE_HERO_KILL: kdHeroList.add(msg); break;
-		case CHAT_MESSAGE_STREAK_KILL: kdHeroList.add(msg); break;
-		case CHAT_MESSAGE_HERO_DENY: kdHeroList.add(msg); break;
-//		case CHAT_MESSAGE_REPORT_REMINDER:gameInfo.setStartTime(lastGameTime); break;
+		case CHAT_MESSAGE_HERO_KILL: heroKillMsgs.add(msg); break;
+		case CHAT_MESSAGE_STREAK_KILL: heroKillMsgs.add(msg); break;
+		case CHAT_MESSAGE_HERO_DENY: heroKillMsgs.add(msg); break;
+		//		case CHAT_MESSAGE_REPORT_REMINDER:gameInfo.setStartTime(lastGameTime); break;
 		}
 		return msg;
 	}
@@ -316,7 +331,7 @@ public class DemoFileDump{
 
 		return msg;
 	}
-	
+
 	Message handleOverheadEvent(CDOTAUserMsg_OverheadEvent msg){
 		switch(msg.getMessageType()){
 		case OVERHEAD_ALERT_GOLD: heroGold[msg.getTargetPlayerEntindex()]+=msg.getValue(); break;
@@ -328,7 +343,7 @@ public class DemoFileDump{
 	void printGameEvent(CSVCMsg_GameEvent msg) throws InvalidProtocolBufferException{
 		Object[] field = null;
 		int iDescriptor;
-		
+
 		for(iDescriptor = 0; iDescriptor < m_GameEventList.getDescriptorsCount(); iDescriptor++ ){
 			CSVCMsg_GameEventList.descriptor_t descriptor = m_GameEventList.getDescriptors(iDescriptor);
 
@@ -375,7 +390,7 @@ public class DemoFileDump{
 	}
 
 	void dumpDemoStringTable(CDemoStringTables stringTables) throws IOException{
-		int itemID = 0;
+		short itemID = 0;
 		for(table_t table : stringTables.getTablesList())
 			for(items_t item : table.getItemsList())
 				switch(table.getTableName()){
@@ -386,12 +401,37 @@ public class DemoFileDump{
 				case "CombatLogNames":
 					itemID++;
 					if(itemID>prevID){
-						combatLogNames.add(item.getStr());
+						String newName =  item.getStr() ;
+
+						combatLogNames.add(newName);
+						if(item.getStr().contains("npc_dota_hero_"))
+							heroList.put(newName, prevID);
 						prevID = itemID;
 					}
 					break;
 				}
 	}
+
+	private String checkHeroName(String name){
+		return name;
+	}
+
+	private String fmtName(String name){
+		String[] words = null;
+
+		if(name.contains("npc_dota_hero_")){
+			words = name.replaceFirst("npc_dota_hero_", "").split("_");
+		}
+
+		if(words!=null){
+			name = "";
+			for(String w : words) name += w.replaceFirst(""+w.charAt(0), ""+(char)(w.charAt(0)-32))+" "; 
+			name = name.trim();
+		}
+
+		return name;
+	}
+
 
 	void spewStringTables(CDemoStringTables stringTables) throws IOException{
 		int index = -1;
@@ -422,26 +462,21 @@ public class DemoFileDump{
 
 		CDotaGameInfo demoInfo = msg.getGameInfo().getDota();
 		teams = new Player[demoInfo.getPlayerInfoCount()];
-		
+
 		for( CPlayerInfo pi : demoInfo.getPlayerInfoList() ){
-			String heroName = pi.getHeroName();
+			String heroName = pi.getHeroName() ;
 			heroIndx = (short) combatLogNames.indexOf(heroName);
-			
-			String[] words = heroName.replaceFirst("npc_dota_hero_", "").split("_");
-			heroName = "";
-			for(String w : words) heroName += w.replaceFirst(""+w.charAt(0), ""+(char)(w.charAt(0)-32))+" "; 
-			heroName = heroName.trim();
-			
+			heroName = fmtName(heroName);
 			tmpWidth = (byte) heroName.length();
 			if(tmpWidth>hWidth) hWidth = tmpWidth;
-			
+
 			String playerName = pi.getPlayerName();
 			tmpWidth = (byte) playerName.length();
 			if(tmpWidth>pWidth) pWidth = tmpWidth;
-			
+
 
 			PlayerInfo user = userInfo.get(playerName);
-//			System.out.println(i+heroName+" => "+user.index+user.name);
+			//			System.out.println(i+heroName+" => "+user.index+user.name);
 			Player p = new Player();
 			p.gUID = user!=null ? user.gUID : "";
 			p.name = playerName;
@@ -449,7 +484,7 @@ public class DemoFileDump{
 			p.hero = heroName;
 			p.slotID = i;
 			p.team = i<5 ? "Radiant" : "Dire";
-//System.out.println(p.gold/(gameInfo.gameLength/60f));
+			//System.out.println(p.gold/(gameInfo.gameLength/60f));
 			players.put(heroIndx, p);			
 			teams[i++] = p;
 		}

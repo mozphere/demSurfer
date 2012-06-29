@@ -1,28 +1,15 @@
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintStream;
-import java.io.PrintWriter;
-import java.io.RandomAccessFile;
-import java.io.Reader;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-
-import org.xerial.snappy.Snappy;
+import java.util.Map;
 
 import com.generated_code.DotaUsermessages.CDOTAUserMsg_ChatEvent;
-import com.google.protobuf.CodedInputStream;
 
-enum Type {
+enum eventType {
 	DAMAGE, HEALING, MODIFIER_GAIN, MODIFIER_LOSS, DEATH, AEGIS
 }
 
@@ -31,100 +18,73 @@ enum Type {
  *
  */
 public class Handler{
-
-	static void tstSnappy() throws UnsupportedEncodingException, IOException{
-		String input = "Hello snappy-java! Snappy-java is a JNI-based wrapper of Snappy, a fast compresser/decompresser.";
-
-		byte[] compressed = Snappy.compress(input.getBytes("UTF-8"));
-		String result = new String(compressed, "UTF-8");
-		System.out.println(result);
-
-		byte[] uncompressed = Snappy.uncompress(compressed);
-		result = new String(uncompressed, "UTF-8");
-		System.out.println(result);
-
-	}
-
-	static void printDemo() throws IOException{
-		RandomAccessFile fp = new RandomAccessFile("spectre_tst.dem", "r");
-		byte[] buf = new byte[7];
-		System.out.println(fp.getFilePointer());
-		fp.read(buf);
-
-		String pb = new String(buf);
-		System.out.println(pb);
-		System.out.println(fp.getFilePointer());
-		System.out.println(fp.readInt());
-		System.out.println(fp.getFilePointer());
-		System.out.println(pb.equals("PBUFDEM"));
-	}
-
-	static void cis() throws IOException{
-		RandomAccessFile fp = new RandomAccessFile("spectre_tst.dem", "r");
-		byte[] buf = new byte[(int) fp.length()];
-		fp.read(buf);
-		CodedInputStream cis = CodedInputStream.newInstance(buf);
-		System.out.println(new String(cis.readRawBytes(7)));
-		cis.skipRawBytes(4);
-		System.out.println(cis.getTotalBytesRead());
-	}
-
-	//	public static Kernel32 INSTANCE = (Kernel32) Native.loadLibrary("Kernel32", Kernel32.class);
-
-	static Type[] types = Type.values();
-	static DemoFileDump demoDump;
-	static DataOutputStream file;
+	static final eventType[] types = eventType.values();
 	static final DataOutputStream out = new DataOutputStream(System.out);
 	static final String nl = System.lineSeparator();
-	static int n = 0;
-	public static void main(String[] args) throws IOException{
-		//		tstSnappy();
-		//		printDemo();
-		//		cis();
+	static FileOutputStream file;
 
-		args = new String[1];
-		args[0] = "test.dem";
+	public static void main(String[] args) throws IOException{
+				args = new String[1];
+				args[0] = "16164678.dem";
 
 		String fileName = "ERROR";
+		DemoFileDump demoDump;
+		Stopwatch s = new Stopwatch();
+
 		if(args.length==0){
 			System.out.println("Usage: " + Handler.class.getSimpleName() + ".jar filename.dem");
 			System.exit(0);
 		}
-		else if(args.length==1)
-			fileName = args[0];
-		else
-			fileName = "results";
 
-		file = new DataOutputStream(new FileOutputStream(fileName+".txt", true));
-		for(String arg : args){
-			Stopwatch s = new Stopwatch();
+		fileName = args.length==1 ? args[0] : "results";
+
+		file = new FileOutputStream(fileName+".txt", true);
+
+		for(int i=0; i<args.length; i++){
 			demoDump = new DemoFileDump();
 
 			s.start();
-			if(demoDump.open(arg))
+			if(demoDump.open(args[i]))
 				demoDump.doDump();
 			s.stop();
 
 			double dumpTime = s.time();
 
 			s.start();
-			kd();
-			combatLog();
+			getKDs(demoDump.getTeams(), demoDump.getHeroKillMsgs());
+			combatLog(demoDump);
 			s.stop();
-			double surfTime = s.time();
+
+			double surfTime = s.time();		
+
+			printGameInfo(demoDump.getGameInfo(), i, dumpTime);
 			System.out.println("Dump Time: "+dumpTime);
 			System.out.println("Surf Time: "+surfTime);
-			file.write((nl+"Dump Time: "+dumpTime+nl).getBytes("UTF-8"));
-			file.write(("Surf Time: "+surfTime+nl).getBytes("UTF-8"));
 		}
 	}
 
-	private static void kd(){
-		Player[] teams = demoDump.teams;
+	private static void printGameInfo(String matchInfo, int n, double dumpTime){
+		try {			
+			byte[] byteString =  (nl+"-------------------------"+(++n)+"-------------------------"+nl+nl+matchInfo).getBytes("UTF-8") ;
+
+			file.write(byteString);
+			out.write(byteString);	
+
+			file.write((nl+"Dump Time: "+dumpTime+nl).getBytes("UTF-8"));
+
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		//		System.out.println("\n");
+		//		out.close(); file.close();
+	}
+
+	private static void getKDs(Player[] teams, ArrayList<CDOTAUserMsg_ChatEvent> kdHeroList){
 		int lastTarget = -1;
 		String type = "";
 
-		for(CDOTAUserMsg_ChatEvent heroKill : demoDump.kdHeroList){
+		for(CDOTAUserMsg_ChatEvent heroKill : kdHeroList){
 			type = heroKill.getType().toString();
 			//			if(teams[heroKill.getPlayerid2()].hero.equals("Sven"))
 			//				System.out.println(teams[heroKill.getPlayerid2()].hero+" -> "+teams[heroKill.getPlayerid1()].hero);
@@ -160,14 +120,71 @@ public class Handler{
 		}
 	}
 
-	private static void combatLog() throws IOException{
+	private static HashMap<String, Player> getSpecialCaseHeroes(final HashMap<Short, Player> players, final HashMap<String, Short> heroList){
+		HashMap<String, Player> specialCaseHeroes =  new HashMap<String, Player>();
+		Short heroIndex;
+		String heroName;
+	
+		heroName = "Enchantress"; 	heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+		heroName = "Chen"; 			heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+		heroName = "Skeleton King"; heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+		heroName = "Brewmaster";	heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+		heroName = "Warlock"; 		heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+		heroName = "Broodmother"; 	heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+		heroName = "Venomancer"; 	heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+		heroName = "Enigma"; 		heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+		heroName = "Beastmaster"; 	heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+		heroName = "Furion"; 		heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+		heroName = "Lycan"; 		heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+		heroName = "Morphling"; 	heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+
+/*		
+		for(Map.Entry<String, Short> hero: heroList.entrySet())	
+			if(heroList.get(hero.getKey())!=null){
+				p = players.get(hero.getValue());
+				specialCases.put(p.hero, p);
+			}
+*/
+
+		return specialCaseHeroes;
+	}
+
+	private static Player findOwner(final String attackerName, final short attackerIndex, final HashMap<String, Player> specialCaseHeroes){
+		Player attacker = specialCaseHeroes.get("Chen");
+		if(attacker==null) attacker = specialCaseHeroes.get("Enchantress");
+		if(attacker==null) attacker = specialCaseHeroes.get("Morphling");
+
+		if(attacker!=null){
+			if( attacker.minions.contains(attackerIndex) ) return attacker;
+		}
+		else{
+			if(attackerName.contains("warlock_golem")) 		return specialCaseHeroes.get("Warlock");
+			if(attackerName.contains("brewmaster")) 		return specialCaseHeroes.get("Brewmaster");
+			if(attackerName.contains("broodmother_spider")) return specialCaseHeroes.get("Broodmother");
+			if(attackerName.contains("plague_ward")) 		return specialCaseHeroes.get("Venomancer");
+			if(attackerName.contains("eidolon")) 			return specialCaseHeroes.get("Enigma");
+			if(attackerName.contains("boar")) 				return specialCaseHeroes.get("BeastMaster");
+			if(attackerName.contains("furion_treant")) 		return specialCaseHeroes.get("Furion");
+			if(attackerName.contains("lycan_wolf")) 		return specialCaseHeroes.get("Lycan");
+		}
+
+
+		return null;
+	}
+
+	private static void combatLog(DemoFileDump demoDump) throws IOException{
+		
+		final HashMap<String, Short> heroList = demoDump.getHeroList();
 		final ArrayList<String> combatLogNames = demoDump.getCombatLogNames();
+		ArrayList<CombatEvent> combatEvents = demoDump.getCombatEvents();
 		final HashMap<Short, Player> players = demoDump.getPlayers();
-		final Player[] teams = demoDump.teams;
+		final Player[] teams = demoDump.getTeams();
+		
 		int heroTargets = 0;
 		int deaths = 0;
 		int kills = 0;
 		final int ASSIST_TLIMIT = 20;
+//		final HashMap<String, Player> specialCaseHeroes = getSpecialCaseHeroes(players, heroList);
 
 		final short helmOfDominator = (short) combatLogNames.indexOf("");
 		final short trollWarlord = (short) combatLogNames.indexOf("npc_dota_neutral_dark_troll_warlord");
@@ -195,18 +212,18 @@ public class Handler{
 		final short replicate = (short) combatLogNames.indexOf("modifier_morphling_replicate_timer");
 		final short illusion = (short) combatLogNames.indexOf("modifier_illusion");
 		CombatEvent lastIllusion = null;
-//		final short disruption = (short) combatLogNames.indexOf("modifier_shadow_demon_disruption");
-//		final Player shadowDemon = players.get((short)combatLogNames.indexOf("npc_dota_hero_shadow_demon"));
+		//		final short disruption = (short) combatLogNames.indexOf("modifier_shadow_demon_disruption");
+		//		final Player shadowDemon = players.get((short)combatLogNames.indexOf("npc_dota_hero_shadow_demon"));
 		//invoker
 
 
 
 		System.out.println("\nCombat Log Names: "+combatLogNames.size());
-		System.out.println("Combat Events: "+demoDump.getCombatEvents().size());
+		System.out.println("Combat Events: "+combatEvents.size());
 		boolean denied = false;
-		for(CombatEvent combatEvent : demoDump.getCombatEvents()){
+		for(CombatEvent combatEvent : combatEvents){
 			Player target = players.get(combatEvent.targetName);
-			Player attacker = players.get(combatEvent.attackerSourceName);
+			Player attackerSource = players.get(combatEvent.attackerSourceName);
 			String attackerName = combatLogNames.get(combatEvent.attackerName);
 
 			boolean isNeutral = attackerName.contains("neutral");
@@ -220,77 +237,69 @@ public class Handler{
 			boolean isBoar = attackerName.contains("boar");
 			boolean isTreant =  attackerName.contains("furion_treant");
 			boolean isWolf = attackerName.contains("lycan_wolf");
+			boolean isChen = chen!=null && chen.minions.contains(combatEvent.attackerName);
+			boolean isEnchantress = enchantress!=null && enchantress.minions.contains(combatEvent.attackerName);
+			boolean isMorphling = morphling!=null && combatEvent.attackerIllusion && morphling.minions.contains(combatEvent.attackerName);
 
-			if(target!=null && attacker!=null) denied = attacker.team.equals(target.team);
+
+			if(target!=null && attackerSource!=null) denied = attackerSource.team.equals(target.team);
 			switch(types[combatEvent.type]){
 			case DAMAGE: //if(attacker!=null && target!=null)heroTargets++; 
 				if(target!=null && !combatEvent.targetIllusion){
-
-					if(attacker!=null && !denied){								
-						if(combatEvent.health!=0)
-							target.damagedBy[attacker.slotID] = combatEvent;
+					if(isChen){
+						attackerSource =  chen;
 					}
-					else if(chen!=null && chen.minions.contains(combatEvent.attackerName)){
-						if(combatEvent.health!=0)
-							target.damagedBy[chen.slotID]=combatEvent;
-						denied = chen.team.equals(target.team);
+					else if(isEnchantress){
+						attackerSource =  enchantress;
 					}
-					else if(enchantress!=null && enchantress.minions.contains(combatEvent.attackerName)){
-						if(combatEvent.health!=0)
-							target.damagedBy[enchantress.slotID]=combatEvent;
-						denied = enchantress.team.equals(target.team);
-					}
-					else if(combatEvent.attackerIllusion && morphling.minions.contains(combatEvent.attackerName)){
-						if(combatEvent.health!=0)
-							target.damagedBy[morphling.slotID]=combatEvent;
-						denied = morphling.team.equals(target.team);
+					else if(isMorphling){
+						attackerSource =  morphling;
+						morphling.minions.clear();
 					}
 					else if(isGolem){
-						if(combatEvent.health!=0)
-							target.damagedBy[warlock.slotID]=combatEvent;
-						denied = warlock.team.equals(target.team);
+						attackerSource =  warlock;
 					}
 					else if(isPanda){
-						if(combatEvent.health!=0)
-							target.damagedBy[brewmaster.slotID]=combatEvent;
-						denied = brewmaster.team.equals(target.team);
+						attackerSource =  brewmaster;
 					}
 					else if(isSpider){
-						if(combatEvent.health!=0)
-							target.damagedBy[broodmother.slotID]=combatEvent;
-						denied = broodmother.team.equals(target.team);
+						attackerSource =  broodmother;
 					}
 					else if(isPlagueWard){
-						if(combatEvent.health!=0)
-							target.damagedBy[venomancer.slotID]=combatEvent;
-						denied = venomancer.team.equals(target.team);
+						attackerSource =  venomancer;
 					}
 					else if(isEidolon){
-						if(combatEvent.health!=0)
-							target.damagedBy[enigma.slotID]=combatEvent;
-						denied = enigma.team.equals(target.team);
+						attackerSource =  enigma;
 					}
 					else if(isBoar){
-						if(combatEvent.health!=0)
-							target.damagedBy[beastmaster.slotID]=combatEvent;
-						denied = beastmaster.team.equals(target.team);
+						attackerSource =  beastmaster;
 					}
 					else if(isTreant){
-						if(combatEvent.health!=0)
-							target.damagedBy[furion.slotID]=combatEvent;
-						denied = furion.team.equals(target.team);
+						attackerSource =  furion;
 					}
 					else if(isWolf){
-						if(combatEvent.health!=0)
-							target.damagedBy[lycan.slotID]=combatEvent;
-						denied = lycan.team.equals(target.team);
+						attackerSource =  lycan;
+					}
+
+
+					if(attackerSource!=null){
+						denied = attackerSource.team.equals(target.team);
+						if(combatEvent.health!=0 && !denied)
+							target.damagedBy[attackerSource.slotID] = combatEvent;
+
 					}
 					else if(isTower || isCreep){
 						denied = false;
 					}
-					else{
-						//						System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
-						//						System.out.println(combatEvent);
+					else if(isNeutral){
+
+					}
+					else{//Some unit not yet accounted for
+						//	System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+					}
+
+					if(combatEvent.health==0){
+
 					}
 				}
 
@@ -322,7 +331,7 @@ public class Handler{
 					if(skeletonKing.slotID < 5){ begin=5; stop=10;} else {begin=0; stop=5;}
 					for(int iAttacker=begin; iAttacker<stop; iAttacker++){
 						if(skeletonKing.damagedBy[iAttacker]!=null && skLastDeath.timeStamp - skeletonKing.damagedBy[iAttacker].timeStamp<= ASSIST_TLIMIT){
-								teams[iAttacker].assists--;
+							teams[iAttacker].assists--;
 						}
 					}
 					reincarnateList.add(combatEvent.timeStamp);
@@ -342,109 +351,90 @@ public class Handler{
 
 						boolean skRessurection = target.hero.equals("Skeleton King") && demoDump.resurrectionList.contains( (int)(combatEvent.timeStamp)+3 );
 
-						if(!denied){
-							if(attacker!=null){//attacker is a hero
-								kills++;
-								//							attacker.kills++;
-							}
-							else if(chen!=null && chen.minions.contains(combatEvent.attackerName) ){
-								kills++;
-								//							chen.kills++;
-								attacker = chen;
-							}
-							else if(enchantress!=null && enchantress.minions.contains(combatEvent.attackerName) ){
-								kills++;
-								//							enchantress.kills++;
-								attacker = enchantress;
-							}
-							else if(combatEvent.attackerIllusion && morphling.minions.contains(combatEvent.attackerName)){
-								attacker = morphling;
-							}
-							else if(isGolem){
-								kills++;
-								//							warlock.kills++;
-								attacker = warlock;
-							}
-							else if(isPanda){
-								kills++;
-								//							brewmaster.kills++;
-								attacker = brewmaster;
-
-							}
-							else if(isSpider){
-								kills++;
-								//							broodmother.kills++;
-								attacker = broodmother;
-							}
-							else if(isPlagueWard){
-								kills++;
-								//							venomancer.kills++;
-								attacker = venomancer;
-							}
-							else if(isEidolon){
-								kills++;
-								//							enigma.kills++;
-								attacker = enigma;
-							}
-							else if(isBoar){
-								kills++;
-								//							beastmaster.kills++;
-								attacker = beastmaster;
-							}
-							else if(isTreant){
-								kills++;
-								//							furion.kills++;
-								attacker = furion;
-							}
-							else if(isWolf){
-								kills++;
-								//							lycan.kills++;
-								attacker = lycan;
-							}
-							else if(isTower || isCreep){
-								int start, end, i = 0, assistsCount=0;
-								if(target.slotID < 5){ start=5; end=10;} else {start=0; end=5;}
-								for(int iAttacker=start; iAttacker<end; iAttacker++){
-									CombatEvent[] assistEvent = target.damagedBy;
-									if(assistEvent[iAttacker]!=null && combatEvent.timeStamp - assistEvent[iAttacker].timeStamp<=ASSIST_TLIMIT){
-										assistsCount++;
-										i = iAttacker;
-									}
-								}
-								if(assistsCount==1){								
-									kills++;
-									//								teams[i].kills++;
-									attacker = teams[i];
-								}
-							}
-							else if(isNeutral){//should be kill by a neutral achievement
-								target.damagedBy = new CombatEvent[10];
-//								System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
-							}
-
-							if(attacker!=null) target.damagedBy[attacker.slotID]=null;
-						}							
-						else if(denied){
-							//grant deny achievement // or suicide
-//							System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+						if(isChen){		
+							attackerSource = chen;
 						}
+						else if(isEnchantress){
+							attackerSource = enchantress;
+						}
+						else if(isMorphling){
+							attackerSource = morphling;
+							morphling.minions.clear();
+						}
+						else if(isGolem){
+							attackerSource = warlock;
+						}
+						else if(isPanda){
+							attackerSource = brewmaster;
+						}
+						else if(isSpider){
+							attackerSource = broodmother;
+						}
+						else if(isPlagueWard){
+							attackerSource = venomancer;
+						}
+						else if(isEidolon){
+							attackerSource = enigma;
+						}
+						else if(isBoar){
+							attackerSource = beastmaster;
+						}
+						else if(isTreant){
+							attackerSource = furion;
+						}
+						else if(isWolf){
+							attackerSource = lycan;
+						}
+						else if(denied){
+							//grant deny achievement or suicide
+							//System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+						}
+
+						if(attackerSource!=null){
+							//if(target.damagedBy[attacker.slotID]==null)
+							//KS Achievement
+
+							//attacker.kills++;
+							target.damagedBy[attackerSource.slotID]=null;
+						}
+						else if(isTower || isCreep){
+							int start, end, i = 0, assistsCount=0;
+							if(target.slotID < 5){ start=5; end=10;} else {start=0; end=5;}
+							for(int iAttacker=start; iAttacker<end; iAttacker++){
+								CombatEvent[] assistEvent = target.damagedBy;
+								if(assistEvent[iAttacker]!=null && combatEvent.timeStamp - assistEvent[iAttacker].timeStamp<=ASSIST_TLIMIT){
+									assistsCount++;
+									i = iAttacker;
+								}
+							}
+							if(assistsCount==1){								
+								attackerSource = teams[i];
+							}
+						}
+						else if(isNeutral){//should be kill by a neutral achievement
+							target.damagedBy = new CombatEvent[10];
+							//System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+						}
+						else//Some unit not yet accounted for
+							System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+
 
 						if(!denied && !isCreep && !isTower){
 							int start, end;
 							if(target.slotID < 5){ start=5; end=10;} else {start=0; end=5;}
 							for(int iAttacker=start; iAttacker<end; iAttacker++){
-								
+
 								if(target.damagedBy[iAttacker]!=null && combatEvent.timeStamp - target.damagedBy[iAttacker].timeStamp<=ASSIST_TLIMIT){
 									teams[iAttacker].assists++;
-//									if(teams[iAttacker].hero.equals("Ursa"))
-//										System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+									if(teams[iAttacker].hero.equals("Morphling"))
+										System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 								}
 							}
 						}
 
 						if(target.hero.equals("Skeleton King")){
 							lastDamagedBy = target.damagedBy.clone();
-							lastDamagedBy[attacker.slotID] = combatEvent;
+							lastDamagedBy[attackerSource.slotID] = combatEvent;
 							skLastDeath = combatEvent;
 						}
 						if(skRessurection && !denied && !isCreep && !isTower){
@@ -452,7 +442,7 @@ public class Handler{
 							//							target.deaths--;
 							kills--;
 							//							attacker.kills--;
-							
+
 							int begin, stop;
 							if(target.slotID < 5){ begin=5; stop=10;} else {begin=0; stop=5;}
 							for(int iAttacker=begin; iAttacker<stop; iAttacker++){
@@ -477,16 +467,7 @@ public class Handler{
 		System.out.println("\nCombatLogNames HeroIDs: " + players.keySet());
 		System.out.println();
 
-		demoDump.getGameInfo().genScoreBoard(teams);
 
-		//		RandomAccessFile file = new RandomAccessFile("results.txt", "rws");
-		//		file.writeUTF(demoDump.getGameInfo().toString());
-
-		file.write((nl+"-------------------------"+(++n)+"-------------------------"+nl+nl+demoDump.getGameInfo()).getBytes("UTF-8"));
-
-		out.write(demoDump.getGameInfo().toString().getBytes("UTF-8"));
-		//		System.out.println("\n");
-		//		out.close();
 	}
 
 	private static void addAssists(){
