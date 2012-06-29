@@ -401,7 +401,7 @@ public class DemoFileDump{
 				case "CombatLogNames":
 					itemID++;
 					if(itemID>prevID){
-						String newName =  item.getStr() ;
+						String newName =  fmtName(item.getStr() );
 
 						combatLogNames.add(newName);
 						if(item.getStr().contains("npc_dota_hero_"))
@@ -464,9 +464,9 @@ public class DemoFileDump{
 		teams = new Player[demoInfo.getPlayerInfoCount()];
 
 		for( CPlayerInfo pi : demoInfo.getPlayerInfoList() ){
-			String heroName = pi.getHeroName() ;
+			String heroName =  fmtName(pi.getHeroName());
 			heroIndx = (short) combatLogNames.indexOf(heroName);
-			heroName = fmtName(heroName);
+		
 			tmpWidth = (byte) heroName.length();
 			if(tmpWidth>hWidth) hWidth = tmpWidth;
 
