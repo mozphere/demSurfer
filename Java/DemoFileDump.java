@@ -49,6 +49,7 @@ public class DemoFileDump{
 	private float[] heroGold;
 	private float lastGameTime;
 	private HashMap<String, Short> heroList;
+	private HashMap<Short, String> modifierList;
 
 	DemoFileDump(){
 		m_demoFile = new DemoFile();
@@ -65,6 +66,7 @@ public class DemoFileDump{
 		prevID = 0;
 		heroGold = new float[64];
 		heroList = new HashMap<String, Short>();
+		modifierList = new HashMap<Short, String>();
 	}
 
 	ArrayList<String> getCombatLogNames(){
@@ -94,6 +96,10 @@ public class DemoFileDump{
 
 	HashMap<String, Short> getHeroList(){
 		return heroList;
+	}
+	
+	HashMap<Short, String> getModifierList(){
+		return modifierList;
 	}
 
 	boolean open(final String filename) throws IOException{
@@ -401,33 +407,59 @@ public class DemoFileDump{
 				case "CombatLogNames":
 					itemID++;
 					if(itemID>prevID){
-						String newName =  fmtName(item.getStr() );
-
-						combatLogNames.add(newName);
-						if(item.getStr().contains("npc_dota_hero_"))
-							heroList.put(newName, prevID);
+						combatLogNames.add( fmtFilter(item.getStr(), prevID) );
 						prevID = itemID;
 					}
 					break;
 				}
 	}
 
-	private String checkHeroName(String name){
+	private String fmtFilter(String name, short i){
+		if(name.contains("npc_dota_hero_"))
+			heroList.put(name = fmtName(name), i);
+		else if( name.contains("modifier") )
+				modifierList.put(i, name = fmtName(name));
+		else
+			name = fmtName(name);
+		
 		return name;
 	}
 
 	private String fmtName(String name){
 		String[] words = null;
 
-		if(name.contains("npc_dota_hero_")){
+		if(name.contains("npc_dota_hero_"))
 			words = name.replaceFirst("npc_dota_hero_", "").split("_");
-		}
 
-		if(words!=null){
+		else if( name.contains("item_") )
+				words = name.replaceFirst("item_", "").split("_");
+		
+		else if( name.contains("modifier_") )
+			words = name.replaceFirst("modifier_", "").split("_");
+		
+		else if( name.contains("npc_dota_creep_") ){
+			name =  name.replaceFirst("npc_dota_creep_", "");
+			if (name.contains("goodguys"))
+				name =  name.replaceFirst("goodguys", "radiant");
+			else if (name.contains("badguys"))
+				name =  name.replaceFirst("badguys", "dire");
+			words = (name+"_creep").split("_");
+		}
+		
+		else if( name.contains("npc_dota_") ){
+			name =  name.replaceFirst("npc_dota_", "");
+			if (name.contains("goodguys"))
+				name =  name.replaceFirst("goodguys", "radiant");
+			else if (name.contains("badguys"))
+				name =  name.replaceFirst("badguys", "dire");
+			words = name.split("_");
+		}
+		else
+			words = name.split("_");
+		
 			name = "";
 			for(String w : words) name += w.replaceFirst(""+w.charAt(0), ""+(char)(w.charAt(0)-32))+" "; 
 			name = name.trim();
-		}
 
 		return name;
 	}

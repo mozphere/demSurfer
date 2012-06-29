@@ -24,8 +24,8 @@ public class Handler{
 	static FileOutputStream file;
 
 	public static void main(String[] args) throws IOException{
-		args = new String[1];
-		args[0] = "16164678.dem";
+//		args = new String[1];
+//		args[0] = "16164678.dem";
 
 		String fileName = "ERROR";
 		DemoFileDump demoDump;
@@ -184,7 +184,8 @@ public class Handler{
 		ArrayList<CombatEvent> combatEvents = demoDump.getCombatEvents();
 		final HashMap<Short, Player> players = demoDump.getPlayers();
 		final Player[] teams = demoDump.getTeams();
-
+		final HashMap<Short, String> modifierList = demoDump.getModifierList();
+//System.out.println(combatLogNames);
 		int heroTargets = 0;
 		int deaths = 0;
 		int kills = 0;
@@ -192,28 +193,19 @@ public class Handler{
 		final HashMap<String, Player> specialCaseHeroes = getSpecialCaseHeroes(players, heroList);
 
 //		final short helmOfDominator = (short) combatLogNames.indexOf("");
-		final short trollWarlord = (short) combatLogNames.indexOf("npc_dota_neutral_dark_troll_warlord");
-		final short skeletonWarrior = (short) combatLogNames.indexOf("npc_dota_dark_troll_warlord_skeleton_warrior");
-		final short enragedWildkin = (short) combatLogNames.indexOf("npc_dota_neutral_enraged_wildkin");
-		final short tornado = (short) combatLogNames.indexOf("npc_dota_enraged_wildkin_tornado");
-
-		final short holyPersuasion = (short) combatLogNames.indexOf("modifier_chen_holy_persuasion");
-
-		final short enchant = (short) combatLogNames.indexOf("modifier_enchantress_enchant");
-
-		final short reincarnate = (short) combatLogNames.indexOf("modifier_skeleton_king_reincarnate_slow");
+		final short trollWarlord = (short) combatLogNames.indexOf("Neutral Dark Troll Warlord");
+		final short skeletonWarrior = (short) combatLogNames.indexOf("Dark Troll Warlord Skeleton Warrior");
+		final short enragedWildkin = (short) combatLogNames.indexOf("Neutral Enraged Wildkin");
+		final short tornado = (short) combatLogNames.indexOf("Enraged Wildkin Tornado");
+		
 		CombatEvent skLastDeath = null;
 		CombatEvent[] lastDamagedBy = null;
 		HashSet<Float> reincarnateList = new HashSet<Float>();
-
-		final short replicate = (short) combatLogNames.indexOf("modifier_morphling_replicate_timer");
-		final short illusion = (short) combatLogNames.indexOf("modifier_illusion");
 		CombatEvent lastIllusion = null;
+		
 		//		final short disruption = (short) combatLogNames.indexOf("modifier_shadow_demon_disruption");
 		//		final Player shadowDemon = players.get((short)combatLogNames.indexOf("npc_dota_hero_shadow_demon"));
 		//invoker
-
-
 
 		System.out.println("\nCombat Log Names: "+combatLogNames.size());
 		System.out.println("Combat Events: "+combatEvents.size());
@@ -223,13 +215,12 @@ public class Handler{
 			Player attackerSource = players.get(combatEvent.attackerSourceName);
 			String attackerName = combatLogNames.get(combatEvent.attackerName);
 
-			boolean isNeutral = attackerName.contains("neutral");
-			boolean isCreep = attackerName.contains("creep_g") || attackerName.contains("creep_b") || attackerName.contains("siege");
-			boolean isTower = attackerName.contains("tower");
-
-
+			boolean isNeutral = attackerName.contains("Neutral");
+			boolean isCreep = attackerName.contains("Creep") || attackerName.contains("Siege");
+			boolean isTower = attackerName.contains("Tower");
 
 			if(target!=null && attackerSource!=null) friendlyFire = attackerSource.team.equals(target.team);
+			
 			switch(types[combatEvent.type]){
 			case DAMAGE: //if(attacker!=null && target!=null)heroTargets++; 
 				if(target!=null && !combatEvent.targetIllusion){
@@ -261,30 +252,23 @@ public class Handler{
 				break;
 			case MODIFIER_GAIN: 
 				attackerSource = players.get(combatEvent.attackerName);
-				String inflictor;
+				String inflictor = modifierList.get(combatEvent.inflictorName);
+//				System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60+" with "+combatLogNames.get(combatEvent.inflictorName));
 				
-				if(combatEvent.inflictorName==holyPersuasion){
-					attackerSource.minions.add(combatEvent.targetName);
-					if(combatEvent.targetName==trollWarlord)
-						attackerSource.minions.add(skeletonWarrior);
-					if(combatEvent.targetName==enragedWildkin)
-						attackerSource.minions.add(tornado);
-
-				}
-				if(combatEvent.inflictorName==enchant){
+				if(inflictor.matches("Chen Holy Persuasion|Enchantress Enchant")){
 					attackerSource.minions.add(combatEvent.targetName);
 					if(combatEvent.targetName==trollWarlord)
 						attackerSource.minions.add(skeletonWarrior);
 					if(combatEvent.targetName==enragedWildkin)
 						attackerSource.minions.add(tornado);
 				}
-				if(combatEvent.inflictorName==illusion){
+				else if(inflictor.contains("Illusion")){
 					lastIllusion = combatEvent;
 				}
-				if(combatEvent.inflictorName==replicate && combatEvent.timeStamp==lastIllusion.timeStamp){
+				else if(inflictor.contains("Morphling Replicate Timer") && combatEvent.timeStamp==lastIllusion.timeStamp){
 					attackerSource.minions.add(lastIllusion.targetName);
 				}
-				if(combatEvent.inflictorName==reincarnate && !reincarnateList.contains(combatEvent.timeStamp)){ //failsafe
+				else if(inflictor.contains("Skeleton King Reincarnate Slow") && !reincarnateList.contains(combatEvent.timeStamp)){ //failsafe
 					int begin, stop;
 					if(attackerSource.slotID < 5){ begin=5; stop=10;} else {begin=0; stop=5;}
 					for(int iAttacker=begin; iAttacker<stop; iAttacker++){
@@ -353,8 +337,8 @@ public class Handler{
 
 								if(target.damagedBy[iAttacker]!=null && combatEvent.timeStamp - target.damagedBy[iAttacker].timeStamp<=ASSIST_TLIMIT){
 									teams[iAttacker].assists++;
-									if(teams[iAttacker].hero.equals("Shadow Demon"))
-										System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+//									if(teams[iAttacker].hero.equals("Shadow Demon"))
+//										System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 								}
 							}
 						}
