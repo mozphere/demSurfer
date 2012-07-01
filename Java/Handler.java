@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.Map;
 
 import com.generated_code.DotaUsermessages.CDOTAUserMsg_ChatEvent;
+import com.generated_code.DotaUsermessages.CDOTAUserMsg_OverheadEvent;
 
 enum eventType {
 	DAMAGE, HEALING, MODIFIER_GAIN, MODIFIER_LOSS, DEATH, AEGIS
@@ -24,8 +25,8 @@ public class Handler{
 	static FileOutputStream file;
 
 	public static void main(String[] args) throws IOException{
-//		args = new String[1];
-//		args[0] = "16164678.dem";
+		args = new String[1];
+		args[0] = "16168247.dem";
 
 		String fileName = "ERROR";
 		DemoFileDump demoDump;
@@ -51,8 +52,8 @@ public class Handler{
 			double dumpTime = s.time();
 
 			s.start();
-			getKDs(demoDump.getTeams(), demoDump.getHeroKillMsgs());
-			combatLog(demoDump);
+			getKDs(demoDump.getTeams(), demoDump.getHeroKillMsgs(), demoDump.getUserInfo());
+//			combatLog(demoDump);
 			s.stop();
 
 			double surfTime = s.time();		
@@ -80,42 +81,55 @@ public class Handler{
 		//		out.close(); file.close();
 	}
 
-	private static void getKDs(Player[] teams, ArrayList<CDOTAUserMsg_ChatEvent> kdHeroList){
+	private static void getKDs(Player[] teams, ArrayList<HeroKill> kdHeroList, HashMap<String, PlayerInfo> userInfo){
 		int lastTarget = -1;
 		String type = "";
+		short heroIndex;
 
-		for(CDOTAUserMsg_ChatEvent heroKill : kdHeroList){
-			type = heroKill.getType().toString();
+		for(HeroKill heroKill : kdHeroList){
+			CDOTAUserMsg_ChatEvent chatMsg = heroKill.chatMsg;
+			type = chatMsg.getType().toString();
 			//			if(teams[heroKill.getPlayerid2()].hero.equals("Sven"))
 			//				System.out.println(teams[heroKill.getPlayerid2()].hero+" -> "+teams[heroKill.getPlayerid1()].hero);
 
 			if(type.equals("CHAT_MESSAGE_HERO_KILL")){
-				if(heroKill.getPlayerid3()==-1){
-					if(heroKill.getValue()!=0){
-						teams[heroKill.getPlayerid2()].kills++;
-						teams[heroKill.getPlayerid1()].deaths++;
-						lastTarget = heroKill.getPlayerid1();	
+				if(chatMsg.getPlayerid3()==-1){
+					if(chatMsg.getValue()!=0){
+						teams[chatMsg.getPlayerid2()].kills++;
+						teams[chatMsg.getPlayerid1()].deaths++;
+						lastTarget = chatMsg.getPlayerid1();
+						
+						for(String assist : heroKill.assists.keySet()){
+							if(teams[userInfo.get(assist).slotId].hero.equals("Antimage")){
+								System.out.println(teams[chatMsg.getPlayerid2()].hero+" -> "+teams[chatMsg.getPlayerid1()].hero+" for "+heroKill.assists.get(assist).getValue());
+								System.out.println(teams[userInfo.get(assist).slotId].hero);
+							}
+							teams[userInfo.get(assist).slotId].assists++;
+						}
 					}
 					else{//neutral kills hero
-						teams[heroKill.getPlayerid1()].deaths++;
+						teams[chatMsg.getPlayerid1()].deaths++;
 					}
 				}
 				else{//should be creep/tower kill and gold split among assists
-					//					System.out.println(heroKill);
-					teams[heroKill.getPlayerid1()].deaths++;
-					if(heroKill.getPlayerid2()!=-1) teams[heroKill.getPlayerid2()].assists++;
-					if(heroKill.getPlayerid3()!=-1) teams[heroKill.getPlayerid3()].assists++;
-					if(heroKill.getPlayerid4()!=-1) teams[heroKill.getPlayerid4()].assists++;
-					if(heroKill.getPlayerid5()!=-1) teams[heroKill.getPlayerid5()].assists++;
-					if(heroKill.getPlayerid6()!=-1) teams[heroKill.getPlayerid6()].assists++;
+					//System.out.println(heroKill);
+					teams[chatMsg.getPlayerid1()].deaths++;
+					if(chatMsg.getPlayerid2()!=-1) teams[chatMsg.getPlayerid2()].assists++;
+					if(chatMsg.getPlayerid3()!=-1) teams[chatMsg.getPlayerid3()].assists++;
+					if(chatMsg.getPlayerid4()!=-1) teams[chatMsg.getPlayerid4()].assists++;
+					if(chatMsg.getPlayerid5()!=-1) teams[chatMsg.getPlayerid5()].assists++;
+					if(chatMsg.getPlayerid6()!=-1) teams[chatMsg.getPlayerid6()].assists++;
 				}
 			}
-			else if(type.equals("CHAT_MESSAGE_STREAK_KILL") && heroKill.getPlayerid4()!=lastTarget){
-				teams[heroKill.getPlayerid1()].kills++;
-				teams[heroKill.getPlayerid4()].deaths++;				
+			else if(type.equals("CHAT_MESSAGE_STREAK_KILL") && chatMsg.getPlayerid4()!=lastTarget){
+				teams[chatMsg.getPlayerid1()].kills++;
+				teams[chatMsg.getPlayerid4()].deaths++;
+				for(String assist : heroKill.assists.keySet()){
+					teams[userInfo.get(assist).slotId].assists++;
+				}
 			}
 			else if(type.equals("CHAT_MESSAGE_HERO_DENY"))
-				teams[heroKill.getPlayerid1()].deaths++;
+				teams[chatMsg.getPlayerid1()].deaths++;
 			//teams[heroKill.getPlayerid2()] deny achievement
 		}
 	}
@@ -185,24 +199,24 @@ public class Handler{
 		final HashMap<Short, Player> players = demoDump.getPlayers();
 		final Player[] teams = demoDump.getTeams();
 		final HashMap<Short, String> modifierList = demoDump.getModifierList();
-//System.out.println(combatLogNames);
+		//System.out.println(combatLogNames);
 		int heroTargets = 0;
 		int deaths = 0;
 		int kills = 0;
 		final int ASSIST_TLIMIT = 20;
 		final HashMap<String, Player> specialCaseHeroes = getSpecialCaseHeroes(players, heroList);
 
-//		final short helmOfDominator = (short) combatLogNames.indexOf("");
+		//		final short helmOfDominator = (short) combatLogNames.indexOf("");
 		final short trollWarlord = (short) combatLogNames.indexOf("Neutral Dark Troll Warlord");
 		final short skeletonWarrior = (short) combatLogNames.indexOf("Dark Troll Warlord Skeleton Warrior");
 		final short enragedWildkin = (short) combatLogNames.indexOf("Neutral Enraged Wildkin");
 		final short tornado = (short) combatLogNames.indexOf("Enraged Wildkin Tornado");
-		
+
 		CombatEvent skLastDeath = null;
 		CombatEvent[] lastDamagedBy = null;
 		HashSet<Float> reincarnateList = new HashSet<Float>();
 		CombatEvent lastIllusion = null;
-		
+
 		//		final short disruption = (short) combatLogNames.indexOf("modifier_shadow_demon_disruption");
 		//		final Player shadowDemon = players.get((short)combatLogNames.indexOf("npc_dota_hero_shadow_demon"));
 		//invoker
@@ -220,11 +234,11 @@ public class Handler{
 			boolean isTower = attackerName.contains("Tower");
 
 			if(target!=null && attackerSource!=null) friendlyFire = attackerSource.team.equals(target.team);
-			
+
 			switch(types[combatEvent.type]){
 			case DAMAGE: //if(attacker!=null && target!=null)heroTargets++; 
 				if(target!=null && !combatEvent.targetIllusion){
-					
+
 					if( attackerSource==null || (combatEvent.attackerIllusion && friendlyFire) ) //Morphling's illu's don't have him as source, unlike other heroes.
 						attackerSource =  findOwner(attackerName, combatEvent.attackerName, specialCaseHeroes);
 
@@ -253,8 +267,8 @@ public class Handler{
 			case MODIFIER_GAIN: 
 				attackerSource = players.get(combatEvent.attackerName);
 				String inflictor = modifierList.get(combatEvent.inflictorName);
-//				System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60+" with "+combatLogNames.get(combatEvent.inflictorName));
-				
+				//				System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60+" with "+combatLogNames.get(combatEvent.inflictorName));
+
 				if(inflictor.matches("Chen Holy Persuasion|Enchantress Enchant")){
 					attackerSource.minions.add(combatEvent.targetName);
 					if(combatEvent.targetName==trollWarlord)
@@ -273,7 +287,7 @@ public class Handler{
 					if(attackerSource.slotID < 5){ begin=5; stop=10;} else {begin=0; stop=5;}
 					for(int iAttacker=begin; iAttacker<stop; iAttacker++){
 						if(attackerSource.damagedBy[iAttacker]!=null && skLastDeath.timeStamp - attackerSource.damagedBy[iAttacker].timeStamp<= ASSIST_TLIMIT){
-							teams[iAttacker].assists--;
+//							teams[iAttacker].assists--;
 						}
 					}
 					reincarnateList.add(combatEvent.timeStamp);
@@ -284,7 +298,7 @@ public class Handler{
 				if(target!=null){ //target is a hero
 					if(target.aegisTimeStamp==-1 || (combatEvent.timeStamp - target.aegisTimeStamp) > 600f){ //10mins *60
 						deaths++; 
-						//						target.deaths++;
+//						target.deaths++;
 
 						if(combatEvent.targetIllusion){
 							System.out.println("illusions deaths shouldn't count towards a hero's kills or deaths");
@@ -297,14 +311,19 @@ public class Handler{
 							attackerSource =  findOwner(attackerName, combatEvent.attackerName, specialCaseHeroes);
 
 						if(attackerSource!=null){
-							//if(target.damagedBy[attacker.slotID]==null)
-							//KS Achievement
-							if(friendlyFire){
-								//grant deny achievement or suicide
-								//System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+							if(!friendlyFire){
+								//attacker.kills++;
+								if(target.damagedBy[attackerSource.slotID]==null){//KS Achievement
+									for(CombatEvent ce: target.damagedBy) if(ce!=null)System.out.println(combatLogNames.get(ce.attackerName)+" at "+ce.timeStamp/60);
+									System.out.println(attackerName+" KSED "+target.hero+" at "+combatEvent.timeStamp/60);									
+								}
+							}
+							else {//grant deny achievement or suicide
+								
+//								System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 							}
 
-							//attacker.kills++;
+
 							target.damagedBy[attackerSource.slotID]=null;
 						}
 						else if(isTower || isCreep){
@@ -336,9 +355,9 @@ public class Handler{
 							for(int iAttacker=start; iAttacker<end; iAttacker++){
 
 								if(target.damagedBy[iAttacker]!=null && combatEvent.timeStamp - target.damagedBy[iAttacker].timeStamp<=ASSIST_TLIMIT){
-									teams[iAttacker].assists++;
-//									if(teams[iAttacker].hero.equals("Shadow Demon"))
-//										System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+//									teams[iAttacker].assists++;
+									//									if(teams[iAttacker].hero.equals("Shadow Demon"))
+									//										System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 								}
 							}
 						}
@@ -358,7 +377,7 @@ public class Handler{
 							if(target.slotID < 5){ begin=5; stop=10;} else {begin=0; stop=5;}
 							for(int iAttacker=begin; iAttacker<stop; iAttacker++){
 								if(target.damagedBy[iAttacker]!=null && combatEvent.timeStamp - target.damagedBy[iAttacker].timeStamp<=ASSIST_TLIMIT){
-									teams[iAttacker].assists--;
+//									teams[iAttacker].assists--;
 									target.damagedBy[iAttacker] = null;
 								}
 							}

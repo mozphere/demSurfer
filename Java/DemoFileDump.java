@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map.Entry;
+import java.util.Stack;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedInputStream;
@@ -40,7 +41,7 @@ public class DemoFileDump{
 	private HashMap<Short, Player> players;
 	private Player[] teams;
 	private int m_nFrameNumber;
-	private ArrayList<CDOTAUserMsg_ChatEvent> heroKillMsgs;
+	private ArrayList<HeroKill> heroKillMsgs;
 	private int reincarnation;
 	private GameInfo gameInfo;
 	private String combatSummary;
@@ -50,6 +51,9 @@ public class DemoFileDump{
 	private float lastGameTime;
 	private HashMap<String, Short> heroList;
 	private HashMap<Short, String> modifierList;
+	private int lastDeath;
+	private Stack<CDOTAUserMsg_OverheadEvent> goldList;
+	private PlayerInfo[] playerInfo;
 
 	DemoFileDump(){
 		m_demoFile = new DemoFile();
@@ -59,7 +63,7 @@ public class DemoFileDump{
 		resurrectionList = new HashSet<Integer>();
 		userInfo = new HashMap<String, PlayerInfo>();
 		players = new HashMap<Short, Player>();
-		heroKillMsgs =  new ArrayList<CDOTAUserMsg_ChatEvent>();
+		heroKillMsgs =  new ArrayList<HeroKill>();
 		gameInfo = new GameInfo();
 		combatSummary = "\nCOMBAT SUMMARY\n";
 		tmp = "";
@@ -67,6 +71,8 @@ public class DemoFileDump{
 		heroGold = new float[64];
 		heroList = new HashMap<String, Short>();
 		modifierList = new HashMap<Short, String>();
+		goldList = new Stack<CDOTAUserMsg_OverheadEvent>();
+		playerInfo = new PlayerInfo[64];
 	}
 
 	ArrayList<String> getCombatLogNames(){
@@ -84,13 +90,17 @@ public class DemoFileDump{
 	Player[] getTeams(){
 		return teams;
 	}
+	
+	HashMap<String, PlayerInfo> getUserInfo(){
+		return userInfo;
+	}
 
 	String getGameInfo(){
 		gameInfo.genScoreBoard(teams);
 		return gameInfo.toString();
 	}
 
-	ArrayList<CDOTAUserMsg_ChatEvent> getHeroKillMsgs(){
+	ArrayList<HeroKill> getHeroKillMsgs(){
 		return heroKillMsgs;
 	}
 
@@ -309,10 +319,18 @@ public class DemoFileDump{
 	Message handleChatMsg(CDOTAUserMsg_ChatEvent msg){
 		switch(msg.getType()){
 		case CHAT_MESSAGE_AEGIS: combatEvents.add(new CombatEvent((short) msg.getPlayerid1(), combatEvents.get(combatEvents.size()-1).timeStamp)); break;
-		case CHAT_MESSAGE_HERO_KILL: heroKillMsgs.add(msg); break;
-		case CHAT_MESSAGE_STREAK_KILL: heroKillMsgs.add(msg); break;
-		case CHAT_MESSAGE_HERO_DENY: heroKillMsgs.add(msg); break;
-		//		case CHAT_MESSAGE_REPORT_REMINDER:gameInfo.setStartTime(lastGameTime); break;
+		case CHAT_MESSAGE_STREAK_KILL:
+		case CHAT_MESSAGE_HERO_KILL:
+			goldList.pop(); //remove overhead msg of gold given to killer, hero kill chat msg has this value already.
+			HeroKill heroKill = new HeroKill(msg);
+			for(int i=goldList.size()-1; i>lastDeath; i--){
+				CDOTAUserMsg_OverheadEvent assist =  goldList.pop();
+				heroKill.assists.put(playerInfo[assist.getTargetPlayerEntindex()].name, assist);
+			}
+			heroKillMsgs.add(heroKill);
+			break;
+		case CHAT_MESSAGE_HERO_DENY: heroKillMsgs.add(new HeroKill(msg)); break;
+		//case CHAT_MESSAGE_REPORT_REMINDER:gameInfo.setStartTime(lastGameTime); break;
 		}
 		return msg;
 	}
@@ -340,7 +358,10 @@ public class DemoFileDump{
 
 	Message handleOverheadEvent(CDOTAUserMsg_OverheadEvent msg){
 		switch(msg.getMessageType()){
-		case OVERHEAD_ALERT_GOLD: heroGold[msg.getTargetPlayerEntindex()]+=msg.getValue(); break;
+		case OVERHEAD_ALERT_GOLD:
+			goldList.push(msg);			
+			heroGold[msg.getTargetPlayerEntindex()]+=msg.getValue();
+			break;
 		case OVERHEAD_ALERT_XP: break;
 		}
 		return msg;
@@ -391,15 +412,50 @@ public class DemoFileDump{
 
 				if(isCombatLog) field[i] = v;
 			}
-			if(isCombatLog) combatEvents.add(new CombatEvent(field));
+			if(isCombatLog){
+				CombatEvent combatEvent = new CombatEvent(field);
+				combatEvents.add(combatEvent);
+				if(combatEvent.type==4)
+					lastDeath = goldList.size()-1;
+			}
 		}
 	}
-
+	
+	void spewStringTables(CDemoStringTables stringTables) throws IOException{
+		int index = -1;
+		for(table_t table : stringTables.getTablesList()){
+			for(items_t item : table.getItemsList())
+				switch(table.getTableName()){
+				case "ModifierNames": modifierNames.add(item.getStr()); break;
+				case "userinfo": 
+					if(item.getData().size() == PlayerInfo.SIZE){
+						PlayerInfo pInfo = new PlayerInfo(item.getData());
+						index += pInfo.name.equals("SourceTV") ? 2 : 1;
+						pInfo.index = index;
+						userInfo.put(pInfo.name, pInfo);
+						playerInfo[index] = pInfo;
+					}
+					break;
+				}
+		}
+		reincarnation = modifierNames.indexOf("modifier_skeleton_king_reincarnation");
+	}
+	
 	void dumpDemoStringTable(CDemoStringTables stringTables) throws IOException{
+		int index = -1;
 		short itemID = 0;
 		for(table_t table : stringTables.getTablesList())
 			for(items_t item : table.getItemsList())
 				switch(table.getTableName()){
+				case "userinfo": 
+					if(item.getData().size() == PlayerInfo.SIZE){
+						PlayerInfo pInfo = new PlayerInfo(item.getData());
+						index += pInfo.name.equals("SourceTV") ? 2 : 1;
+						pInfo.index = index;
+						userInfo.put(pInfo.name, pInfo);
+						playerInfo[index] = pInfo;
+					}
+					break;
 				case "ActiveModifiers":
 					CDOTAModifierBuffTableEntry entry =  CDOTAModifierBuffTableEntry.parseFrom(item.getData());
 					if(entry.getName()==reincarnation)	resurrectionList.add((int) entry.getCreationTime());
@@ -464,26 +520,6 @@ public class DemoFileDump{
 		return name;
 	}
 
-
-	void spewStringTables(CDemoStringTables stringTables) throws IOException{
-		int index = -1;
-		for(table_t table : stringTables.getTablesList()){
-			for(items_t item : table.getItemsList())
-				switch(table.getTableName()){
-				case "ModifierNames": modifierNames.add(item.getStr()); break;
-				case "userinfo": 
-					if(item.getData().size() == PlayerInfo.SIZE){
-						PlayerInfo playerInfo = new PlayerInfo(item.getData());
-						index += playerInfo.name.equals("SourceTV") ? 2 : 1;
-						playerInfo.index = index;
-						userInfo.put(playerInfo.name, playerInfo);
-					}
-					break;
-				}
-		}
-		reincarnation = modifierNames.indexOf("modifier_skeleton_king_reincarnation");
-	}
-
 	void handleGameInfo(CDemoFileInfo msg) throws UnsupportedEncodingException{
 		short i = 0;
 		float timedGold = gameInfo.gameLength/0.8f;
@@ -508,7 +544,7 @@ public class DemoFileDump{
 
 
 			PlayerInfo user = userInfo.get(playerName);
-			//			System.out.println(i+heroName+" => "+user.index+user.name);
+						System.out.println(i+". "+heroName+" => "+user.index+". "+user.name);
 			Player p = new Player();
 			p.gUID = user!=null ? user.gUID : "";
 			p.name = playerName;
@@ -517,6 +553,7 @@ public class DemoFileDump{
 			p.slotID = i;
 			p.team = i<5 ? "Radiant" : "Dire";
 			//System.out.println(p.gold/(gameInfo.gameLength/60f));
+			user.slotId = i;
 			players.put(heroIndx, p);			
 			teams[i++] = p;
 		}

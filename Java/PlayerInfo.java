@@ -25,6 +25,8 @@ import com.google.protobuf.CodedInputStream;
 		//		boolean	isReplay; // true if player is the Replay proxy	
 		long[] customFiles = new long[MAX_CUSTOM_FILES]; // custom files CRC for this player - CRC32_t(uint32)		
 		byte filesDownloaded; // this counter increases each time the server downloaded a new file - unsigned char
+		
+		short slotId;
 
 		PlayerInfo(ByteString itemData) throws IOException{
 			CodedInputStream cis = itemData.newCodedInput();

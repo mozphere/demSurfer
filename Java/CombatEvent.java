@@ -33,6 +33,10 @@
 		}
 
 		public String toString(){
+			
+//			if(type == 0)
+//				return String.format("", args)
+			
 			return String.format("Type: %d\nAttacker Source: %d\nTarget: %d\nAttacker: %d\nInflictor: %d\nAttacker Illusion: %s\nTarget Illusion: %s\nValue: %d\nHealth: %d\nTime Stamp: %f\nTarget Source: %d\n",
 					type, attackerSourceName, targetName, attackerName, inflictorName, attackerIllusion, targetIllusion, value, health, timeStamp, targetSourceName);
 		}
