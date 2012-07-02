@@ -1,14 +1,11 @@
 import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 
 import com.generated_code.DotaUsermessages.CDOTAUserMsg_ChatEvent;
-import com.generated_code.DotaUsermessages.CDOTAUserMsg_OverheadEvent;
 
 enum eventType {
 	DAMAGE, HEALING, MODIFIER_GAIN, MODIFIER_LOSS, DEATH, AEGIS
@@ -25,8 +22,8 @@ public class Handler{
 	static FileOutputStream file;
 
 	public static void main(String[] args) throws IOException{
-		args = new String[1];
-		args[0] = "16168247.dem";
+//		args = new String[1];
+//		args[0] = "19910918.dem";
 
 		String fileName = "ERROR";
 		DemoFileDump demoDump;
@@ -52,8 +49,8 @@ public class Handler{
 			double dumpTime = s.time();
 
 			s.start();
-			getKDs(demoDump.getTeams(), demoDump.getHeroKillMsgs(), demoDump.getUserInfo());
-//			combatLog(demoDump);
+			getKDs(demoDump.getTeams(), demoDump.getHeroKillMsgs());
+			ArrayList<String> combatLog = combatLog(demoDump);
 			s.stop();
 
 			double surfTime = s.time();		
@@ -61,6 +58,10 @@ public class Handler{
 			printGameInfo(demoDump.getGameInfo(), i, dumpTime);
 			System.out.println("Dump Time: "+dumpTime);
 			System.out.println("Surf Time: "+surfTime);
+			
+//			file = new FileOutputStream("Combat Log.txt", false);
+//			for(String logEntry : combatLog)
+//				file.write((logEntry+nl).getBytes("UTF-8"));
 		}
 	}
 
@@ -81,55 +82,41 @@ public class Handler{
 		//		out.close(); file.close();
 	}
 
-	private static void getKDs(Player[] teams, ArrayList<HeroKill> kdHeroList, HashMap<String, PlayerInfo> userInfo){
+	private static void getKDs(Player[] teams, ArrayList<CDOTAUserMsg_ChatEvent> kdHeroList){
 		int lastTarget = -1;
 		String type = "";
-		short heroIndex;
 
-		for(HeroKill heroKill : kdHeroList){
-			CDOTAUserMsg_ChatEvent chatMsg = heroKill.chatMsg;
-			type = chatMsg.getType().toString();
+		for(CDOTAUserMsg_ChatEvent heroKill : kdHeroList){
+			type = heroKill.getType().toString();
 			//			if(teams[heroKill.getPlayerid2()].hero.equals("Sven"))
 			//				System.out.println(teams[heroKill.getPlayerid2()].hero+" -> "+teams[heroKill.getPlayerid1()].hero);
 
 			if(type.equals("CHAT_MESSAGE_HERO_KILL")){
-				if(chatMsg.getPlayerid3()==-1){
-					if(chatMsg.getValue()!=0){
-						teams[chatMsg.getPlayerid2()].kills++;
-						teams[chatMsg.getPlayerid1()].deaths++;
-						lastTarget = chatMsg.getPlayerid1();
-						
-						for(String assist : heroKill.assists.keySet()){
-							if(teams[userInfo.get(assist).slotId].hero.equals("Antimage")){
-								System.out.println(teams[chatMsg.getPlayerid2()].hero+" -> "+teams[chatMsg.getPlayerid1()].hero+" for "+heroKill.assists.get(assist).getValue());
-								System.out.println(teams[userInfo.get(assist).slotId].hero);
-							}
-							teams[userInfo.get(assist).slotId].assists++;
-						}
+				if(heroKill.getPlayerid3()==-1){
+					if(heroKill.getValue()!=0){
+						teams[heroKill.getPlayerid2()].kills++;
+						teams[heroKill.getPlayerid1()].deaths++;
+						lastTarget = heroKill.getPlayerid1();	
 					}
 					else{//neutral kills hero
-						teams[chatMsg.getPlayerid1()].deaths++;
+						teams[heroKill.getPlayerid1()].deaths++;
 					}
 				}
-				else{//should be creep/tower kill and gold split among assists
-					//System.out.println(heroKill);
-					teams[chatMsg.getPlayerid1()].deaths++;
-					if(chatMsg.getPlayerid2()!=-1) teams[chatMsg.getPlayerid2()].assists++;
-					if(chatMsg.getPlayerid3()!=-1) teams[chatMsg.getPlayerid3()].assists++;
-					if(chatMsg.getPlayerid4()!=-1) teams[chatMsg.getPlayerid4()].assists++;
-					if(chatMsg.getPlayerid5()!=-1) teams[chatMsg.getPlayerid5()].assists++;
-					if(chatMsg.getPlayerid6()!=-1) teams[chatMsg.getPlayerid6()].assists++;
+				else{//kill by creep, tower, or fountain and gold split among assists
+					teams[heroKill.getPlayerid1()].deaths++;
+					if(heroKill.getPlayerid2()!=-1) teams[heroKill.getPlayerid2()].assists++;
+					if(heroKill.getPlayerid3()!=-1) teams[heroKill.getPlayerid3()].assists++;
+					if(heroKill.getPlayerid4()!=-1) teams[heroKill.getPlayerid4()].assists++;
+					if(heroKill.getPlayerid5()!=-1) teams[heroKill.getPlayerid5()].assists++;
+					if(heroKill.getPlayerid6()!=-1) teams[heroKill.getPlayerid6()].assists++;
 				}
 			}
-			else if(type.equals("CHAT_MESSAGE_STREAK_KILL") && chatMsg.getPlayerid4()!=lastTarget){
-				teams[chatMsg.getPlayerid1()].kills++;
-				teams[chatMsg.getPlayerid4()].deaths++;
-				for(String assist : heroKill.assists.keySet()){
-					teams[userInfo.get(assist).slotId].assists++;
-				}
+			else if(type.equals("CHAT_MESSAGE_STREAK_KILL") && heroKill.getPlayerid4()!=lastTarget){
+				teams[heroKill.getPlayerid1()].kills++;
+				teams[heroKill.getPlayerid4()].deaths++;				
 			}
 			else if(type.equals("CHAT_MESSAGE_HERO_DENY"))
-				teams[chatMsg.getPlayerid1()].deaths++;
+				teams[heroKill.getPlayerid1()].deaths++;
 			//teams[heroKill.getPlayerid2()] deny achievement
 		}
 	}
@@ -151,7 +138,9 @@ public class Handler{
 		heroName = "Furion"; 		heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
 		heroName = "Lycan"; 		heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
 		heroName = "Morphling"; 	heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
-
+		heroName = "Invoker"; 		heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+		heroName = "Shadow Shaman"; heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+		heroName = "Lone Druid"; 	heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
 		/*		
 		for(Map.Entry<String, Short> hero: heroList.entrySet())	
 			if(heroList.get(hero.getKey())!=null){
@@ -177,46 +166,47 @@ public class Handler{
 			return attacker;
 		}
 
-		if(attackerName.contains("warlock_golem")) 		return specialCaseHeroes.get("Warlock");
-		if(attackerName.contains("brewmaster")) 		return specialCaseHeroes.get("Brewmaster");
-		if(attackerName.contains("broodmother_spider")) return specialCaseHeroes.get("Broodmother");
-		if(attackerName.contains("plague_ward")) 		return specialCaseHeroes.get("Venomancer");
-		if(attackerName.contains("eidolon")) 			return specialCaseHeroes.get("Enigma");
-		if(attackerName.contains("boar")) 				return specialCaseHeroes.get("BeastMaster");
-		if(attackerName.contains("furion_treant")) 		return specialCaseHeroes.get("Furion");
-		if(attackerName.contains("lycan_wolf")) 		return specialCaseHeroes.get("Lycan");
-
-
+		if(attackerName.contains("Warlock Golem")) 		return specialCaseHeroes.get("Warlock");
+		if(attackerName.contains("Brewmaster")) 		return specialCaseHeroes.get("Brewmaster");
+		if(attackerName.contains("Broodmother Spider")) return specialCaseHeroes.get("Broodmother");
+		if(attackerName.contains("Plague Ward")) 		return specialCaseHeroes.get("Venomancer");
+		if(attackerName.contains("Eidolon")) 			return specialCaseHeroes.get("Enigma");
+		if(attackerName.contains("Boar")) 				return specialCaseHeroes.get("Beastmaster");
+		if(attackerName.contains("Furion Treant")) 		return specialCaseHeroes.get("Furion");
+		if(attackerName.contains("Lycan Wolf")) 		return specialCaseHeroes.get("Lycan");
+		if(attackerName.contains("Forged Spirit")) 		return specialCaseHeroes.get("Invoker");
+		if(attackerName.contains("Shaman Ward")) 		return specialCaseHeroes.get("Shadow Shaman");
+		if(attackerName.contains("Druid Bear")) 		return specialCaseHeroes.get("Lone Druid");
 
 		return null;
 	}
 
-	private static void combatLog(DemoFileDump demoDump) throws IOException{
-
+	private static ArrayList<String> combatLog(DemoFileDump demoDump) throws IOException{
+		ArrayList<String> combatLog = new ArrayList<String>();
 		final HashMap<String, Short> heroList = demoDump.getHeroList();
 		final ArrayList<String> combatLogNames = demoDump.getCombatLogNames();
 		ArrayList<CombatEvent> combatEvents = demoDump.getCombatEvents();
 		final HashMap<Short, Player> players = demoDump.getPlayers();
 		final Player[] teams = demoDump.getTeams();
 		final HashMap<Short, String> modifierList = demoDump.getModifierList();
-		//System.out.println(combatLogNames);
+//System.out.println(combatLogNames);
 		int heroTargets = 0;
 		int deaths = 0;
 		int kills = 0;
 		final int ASSIST_TLIMIT = 20;
 		final HashMap<String, Player> specialCaseHeroes = getSpecialCaseHeroes(players, heroList);
 
-		//		final short helmOfDominator = (short) combatLogNames.indexOf("");
+//		final short helmOfDominator = (short) combatLogNames.indexOf("");
 		final short trollWarlord = (short) combatLogNames.indexOf("Neutral Dark Troll Warlord");
 		final short skeletonWarrior = (short) combatLogNames.indexOf("Dark Troll Warlord Skeleton Warrior");
 		final short enragedWildkin = (short) combatLogNames.indexOf("Neutral Enraged Wildkin");
 		final short tornado = (short) combatLogNames.indexOf("Enraged Wildkin Tornado");
-
+		
 		CombatEvent skLastDeath = null;
 		CombatEvent[] lastDamagedBy = null;
 		HashSet<Float> reincarnateList = new HashSet<Float>();
 		CombatEvent lastIllusion = null;
-
+		
 		//		final short disruption = (short) combatLogNames.indexOf("modifier_shadow_demon_disruption");
 		//		final Player shadowDemon = players.get((short)combatLogNames.indexOf("npc_dota_hero_shadow_demon"));
 		//invoker
@@ -228,17 +218,20 @@ public class Handler{
 			Player target = players.get(combatEvent.targetName);
 			Player attackerSource = players.get(combatEvent.attackerSourceName);
 			String attackerName = combatLogNames.get(combatEvent.attackerName);
+			String targetName =  combatLogNames.get(combatEvent.targetName);
+			String inflictor = combatLogNames.get(combatEvent.inflictorName);
+			combatEvent.fmtLogStr(attackerName, targetName, inflictor);
 
 			boolean isNeutral = attackerName.contains("Neutral");
 			boolean isCreep = attackerName.contains("Creep") || attackerName.contains("Siege");
 			boolean isTower = attackerName.contains("Tower");
 
 			if(target!=null && attackerSource!=null) friendlyFire = attackerSource.team.equals(target.team);
-
+			
 			switch(types[combatEvent.type]){
 			case DAMAGE: //if(attacker!=null && target!=null)heroTargets++; 
 				if(target!=null && !combatEvent.targetIllusion){
-
+					
 					if( attackerSource==null || (combatEvent.attackerIllusion && friendlyFire) ) //Morphling's illu's don't have him as source, unlike other heroes.
 						attackerSource =  findOwner(attackerName, combatEvent.attackerName, specialCaseHeroes);
 
@@ -265,11 +258,10 @@ public class Handler{
 
 				break;
 			case MODIFIER_GAIN: 
-				attackerSource = players.get(combatEvent.attackerName);
-				String inflictor = modifierList.get(combatEvent.inflictorName);
-				//				System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60+" with "+combatLogNames.get(combatEvent.inflictorName));
-
-				if(inflictor.matches("Chen Holy Persuasion|Enchantress Enchant")){
+				attackerSource = players.get(combatEvent.attackerName);				
+//				System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60+" with "+combatLogNames.get(combatEvent.inflictorName));
+				
+				if(inflictor.matches("Chen Holy Persuasion|Enchantress Enchant")){// |Helmf Of Dominator |Necronomicon Archer Aura
 					attackerSource.minions.add(combatEvent.targetName);
 					if(combatEvent.targetName==trollWarlord)
 						attackerSource.minions.add(skeletonWarrior);
@@ -287,18 +279,19 @@ public class Handler{
 					if(attackerSource.slotID < 5){ begin=5; stop=10;} else {begin=0; stop=5;}
 					for(int iAttacker=begin; iAttacker<stop; iAttacker++){
 						if(attackerSource.damagedBy[iAttacker]!=null && skLastDeath.timeStamp - attackerSource.damagedBy[iAttacker].timeStamp<= ASSIST_TLIMIT){
-//							teams[iAttacker].assists--;
+							teams[iAttacker].assists--;
 						}
 					}
 					reincarnateList.add(combatEvent.timeStamp);
 					attackerSource.damagedBy = lastDamagedBy;
 				}
+					
 				break;
 			case DEATH:	
 				if(target!=null){ //target is a hero
 					if(target.aegisTimeStamp==-1 || (combatEvent.timeStamp - target.aegisTimeStamp) > 600f){ //10mins *60
 						deaths++; 
-//						target.deaths++;
+						//						target.deaths++;
 
 						if(combatEvent.targetIllusion){
 							System.out.println("illusions deaths shouldn't count towards a hero's kills or deaths");
@@ -311,22 +304,17 @@ public class Handler{
 							attackerSource =  findOwner(attackerName, combatEvent.attackerName, specialCaseHeroes);
 
 						if(attackerSource!=null){
-							if(!friendlyFire){
-								//attacker.kills++;
-								if(target.damagedBy[attackerSource.slotID]==null){//KS Achievement
-									for(CombatEvent ce: target.damagedBy) if(ce!=null)System.out.println(combatLogNames.get(ce.attackerName)+" at "+ce.timeStamp/60);
-									System.out.println(attackerName+" KSED "+target.hero+" at "+combatEvent.timeStamp/60);									
-								}
-							}
-							else {//grant deny achievement or suicide
-								
-//								System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+							//if(target.damagedBy[attacker.slotID]==null)
+							//KS Achievement
+							if(friendlyFire){
+								//grant deny achievement or suicide
+								//System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 							}
 
-
+							//attacker.kills++;
 							target.damagedBy[attackerSource.slotID]=null;
 						}
-						else if(isTower || isCreep){
+						else if(isTower || isCreep){ // || isFountain
 							int start, end, i = 0, assistsCount=0;
 							if(target.slotID < 5){ start=5; end=10;} else {start=0; end=5;}
 							for(int iAttacker=start; iAttacker<end; iAttacker++){
@@ -346,7 +334,7 @@ public class Handler{
 						}
 
 						else//Some unit not yet accounted for
-							System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+							System.out.println(attackerName+" killed "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 
 
 						if(!friendlyFire && !isCreep && !isTower){
@@ -355,9 +343,9 @@ public class Handler{
 							for(int iAttacker=start; iAttacker<end; iAttacker++){
 
 								if(target.damagedBy[iAttacker]!=null && combatEvent.timeStamp - target.damagedBy[iAttacker].timeStamp<=ASSIST_TLIMIT){
-//									teams[iAttacker].assists++;
-									//									if(teams[iAttacker].hero.equals("Shadow Demon"))
-									//										System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+									teams[iAttacker].assists++;
+//									if(teams[iAttacker].hero.equals("Shadow Demon"))
+//										System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 								}
 							}
 						}
@@ -377,18 +365,21 @@ public class Handler{
 							if(target.slotID < 5){ begin=5; stop=10;} else {begin=0; stop=5;}
 							for(int iAttacker=begin; iAttacker<stop; iAttacker++){
 								if(target.damagedBy[iAttacker]!=null && combatEvent.timeStamp - target.damagedBy[iAttacker].timeStamp<=ASSIST_TLIMIT){
-//									teams[iAttacker].assists--;
+									teams[iAttacker].assists--;
 									target.damagedBy[iAttacker] = null;
 								}
 							}
 						}
 					}
-					else
+					else{
 						target.aegisTimeStamp = -1;
+						combatEvent.fmtLogStr(attackerName, targetName, "Aegis");
+					}
 
 				} break;
 			case AEGIS: teams[combatEvent.playerId].aegisTimeStamp = combatEvent.timeStamp; break;
 			}
+			combatLog.add(combatEvent.toString());
 		}
 
 		System.out.println("Damaged Hero Targets: " + heroTargets );
@@ -397,7 +388,7 @@ public class Handler{
 		System.out.println("\nCombatLogNames HeroIDs: " + players.keySet());
 		System.out.println();
 
-
+		return combatLog;
 	}
 
 	private static void addAssists(){

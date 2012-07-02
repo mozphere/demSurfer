@@ -18,7 +18,7 @@ public class GameInfo {
 		matchID = id;
 		secs = t%60;
 		mins = (int) (t-secs)/60;
-		demoLength = String.format("%dm %02.0fs", mins, secs);
+		demoLength = String.format("%02dm %02.0fs", mins, secs);
 		if(duration==null) duration = demoLength;
 		switch(m){
 		case 1: mode = "All Pick"; break;

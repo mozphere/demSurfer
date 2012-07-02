@@ -1,4 +1,3 @@
-
 import com.generated_code.Demo.CDemoFileInfo;
 import com.generated_code.Demo.CDemoFullPacket;
 import com.generated_code.Demo.CDemoPacket;
@@ -21,7 +20,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map.Entry;
-import java.util.Stack;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedInputStream;
@@ -38,22 +36,20 @@ public class DemoFileDump{
 	private ArrayList<CombatEvent> combatEvents;
 	public HashSet<Integer> resurrectionList;
 	private HashMap<String, PlayerInfo> userInfo;
+	private PlayerInfo[] userList;
 	private HashMap<Short, Player> players;
 	private Player[] teams;
 	private int m_nFrameNumber;
-	private ArrayList<HeroKill> heroKillMsgs;
+	private ArrayList<CDOTAUserMsg_ChatEvent> heroKillMsgs;
 	private int reincarnation;
 	private GameInfo gameInfo;
 	private String combatSummary;
 	private String tmp;
 	private short prevID;
-	private float[] heroGold;
+	private HashMap<String, Integer> userGold;
 	private float lastGameTime;
 	private HashMap<String, Short> heroList;
 	private HashMap<Short, String> modifierList;
-	private int lastDeath;
-	private Stack<CDOTAUserMsg_OverheadEvent> goldList;
-	private PlayerInfo[] playerInfo;
 
 	DemoFileDump(){
 		m_demoFile = new DemoFile();
@@ -62,17 +58,16 @@ public class DemoFileDump{
 		combatEvents = new ArrayList<CombatEvent>();
 		resurrectionList = new HashSet<Integer>();
 		userInfo = new HashMap<String, PlayerInfo>();
+		userList = new PlayerInfo[64];
 		players = new HashMap<Short, Player>();
-		heroKillMsgs =  new ArrayList<HeroKill>();
+		heroKillMsgs =  new ArrayList<CDOTAUserMsg_ChatEvent>();
 		gameInfo = new GameInfo();
 		combatSummary = "\nCOMBAT SUMMARY\n";
 		tmp = "";
 		prevID = 0;
-		heroGold = new float[64];
+		userGold = new HashMap<String, Integer>();
 		heroList = new HashMap<String, Short>();
 		modifierList = new HashMap<Short, String>();
-		goldList = new Stack<CDOTAUserMsg_OverheadEvent>();
-		playerInfo = new PlayerInfo[64];
 	}
 
 	ArrayList<String> getCombatLogNames(){
@@ -90,17 +85,13 @@ public class DemoFileDump{
 	Player[] getTeams(){
 		return teams;
 	}
-	
-	HashMap<String, PlayerInfo> getUserInfo(){
-		return userInfo;
-	}
 
 	String getGameInfo(){
 		gameInfo.genScoreBoard(teams);
 		return gameInfo.toString();
 	}
 
-	ArrayList<HeroKill> getHeroKillMsgs(){
+	ArrayList<CDOTAUserMsg_ChatEvent> getHeroKillMsgs(){
 		return heroKillMsgs;
 	}
 
@@ -319,18 +310,10 @@ public class DemoFileDump{
 	Message handleChatMsg(CDOTAUserMsg_ChatEvent msg){
 		switch(msg.getType()){
 		case CHAT_MESSAGE_AEGIS: combatEvents.add(new CombatEvent((short) msg.getPlayerid1(), combatEvents.get(combatEvents.size()-1).timeStamp)); break;
-		case CHAT_MESSAGE_STREAK_KILL:
-		case CHAT_MESSAGE_HERO_KILL:
-			goldList.pop(); //remove overhead msg of gold given to killer, hero kill chat msg has this value already.
-			HeroKill heroKill = new HeroKill(msg);
-			for(int i=goldList.size()-1; i>lastDeath; i--){
-				CDOTAUserMsg_OverheadEvent assist =  goldList.pop();
-				heroKill.assists.put(playerInfo[assist.getTargetPlayerEntindex()].name, assist);
-			}
-			heroKillMsgs.add(heroKill);
-			break;
-		case CHAT_MESSAGE_HERO_DENY: heroKillMsgs.add(new HeroKill(msg)); break;
-		//case CHAT_MESSAGE_REPORT_REMINDER:gameInfo.setStartTime(lastGameTime); break;
+		case CHAT_MESSAGE_HERO_KILL: heroKillMsgs.add(msg); break;
+		case CHAT_MESSAGE_STREAK_KILL: heroKillMsgs.add(msg); break;
+		case CHAT_MESSAGE_HERO_DENY: heroKillMsgs.add(msg); break;
+		//		case CHAT_MESSAGE_REPORT_REMINDER:gameInfo.setStartTime(lastGameTime); break;
 		}
 		return msg;
 	}
@@ -359,8 +342,9 @@ public class DemoFileDump{
 	Message handleOverheadEvent(CDOTAUserMsg_OverheadEvent msg){
 		switch(msg.getMessageType()){
 		case OVERHEAD_ALERT_GOLD:
-			goldList.push(msg);			
-			heroGold[msg.getTargetPlayerEntindex()]+=msg.getValue();
+			PlayerInfo user = userList[msg.getTargetPlayerEntindex()];
+			int gold = userGold.get(user.name)!=null ? userGold.get(user.name) : 0;
+			userGold.put(user.name, gold+msg.getValue() );
 			break;
 		case OVERHEAD_ALERT_XP: break;
 		}
@@ -412,12 +396,7 @@ public class DemoFileDump{
 
 				if(isCombatLog) field[i] = v;
 			}
-			if(isCombatLog){
-				CombatEvent combatEvent = new CombatEvent(field);
-				combatEvents.add(combatEvent);
-				if(combatEvent.type==4)
-					lastDeath = goldList.size()-1;
-			}
+			if(isCombatLog) combatEvents.add(new CombatEvent(field));
 		}
 	}
 	
@@ -429,31 +408,32 @@ public class DemoFileDump{
 				case "ModifierNames": modifierNames.add(item.getStr()); break;
 				case "userinfo": 
 					if(item.getData().size() == PlayerInfo.SIZE){
-						PlayerInfo pInfo = new PlayerInfo(item.getData());
-						index += pInfo.name.equals("SourceTV") ? 2 : 1;
-						pInfo.index = index;
-						userInfo.put(pInfo.name, pInfo);
-						playerInfo[index] = pInfo;
+						PlayerInfo playerInfo = new PlayerInfo(item.getData());
+						index += playerInfo.name.equals("SourceTV") ? 2 : 1;
+						playerInfo.index = index;
+						userInfo.put(playerInfo.name, playerInfo);
+						userList[index] = playerInfo;
 					}
 					break;
 				}
 		}
 		reincarnation = modifierNames.indexOf("modifier_skeleton_king_reincarnation");
 	}
-	
+
 	void dumpDemoStringTable(CDemoStringTables stringTables) throws IOException{
 		int index = -1;
 		short itemID = 0;
+		
 		for(table_t table : stringTables.getTablesList())
 			for(items_t item : table.getItemsList())
 				switch(table.getTableName()){
 				case "userinfo": 
 					if(item.getData().size() == PlayerInfo.SIZE){
-						PlayerInfo pInfo = new PlayerInfo(item.getData());
-						index += pInfo.name.equals("SourceTV") ? 2 : 1;
-						pInfo.index = index;
-						userInfo.put(pInfo.name, pInfo);
-						playerInfo[index] = pInfo;
+						PlayerInfo playerInfo = new PlayerInfo(item.getData());
+						index += playerInfo.name.equals("SourceTV") ? 2 : 1;
+						playerInfo.index = index;
+						userInfo.put(playerInfo.name, playerInfo);
+						userList[index] = playerInfo;
 					}
 					break;
 				case "ActiveModifiers":
@@ -544,16 +524,15 @@ public class DemoFileDump{
 
 
 			PlayerInfo user = userInfo.get(playerName);
-						System.out.println(i+". "+heroName+" => "+user.index+". "+user.name);
+			//			System.out.println(i+heroName+" => "+user.index+user.name);
 			Player p = new Player();
 			p.gUID = user!=null ? user.gUID : "";
 			p.name = playerName;
-			p.gold = user!=null ? heroGold[user.index]+timedGold : -1;
+			p.gold = user!=null ? timedGold : -1; //userGold.get(playerName)+
 			p.hero = heroName;
 			p.slotID = i;
 			p.team = i<5 ? "Radiant" : "Dire";
-			//System.out.println(p.gold/(gameInfo.gameLength/60f));
-			user.slotId = i;
+//			System.out.println(p.gold/(gameInfo.gameLength/60f));
 			players.put(heroIndx, p);			
 			teams[i++] = p;
 		}
