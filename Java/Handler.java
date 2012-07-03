@@ -1,6 +1,7 @@
 import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -22,21 +23,32 @@ public class Handler{
 	static FileOutputStream file;
 
 	public static void main(String[] args) throws IOException{
-//		args = new String[1];
-//		args[0] = "19910918.dem";
+		//		args = new String[1];
+		//		args[0] = "19934308.dem";
 
 		String fileName = "ERROR";
-		DemoFileDump demoDump;
+		boolean append;
+		DemoFileDump demoDump = null;
+		String matchInfo = "No Info";
 		Stopwatch s = new Stopwatch();
+		double dumpTime = 0;
+		double surfTime = 0;
 
 		if(args.length==0){
 			System.out.println("Usage: " + Handler.class.getSimpleName() + ".jar filename.dem");
 			System.exit(0);
 		}
 
-		fileName = args.length==1 ? args[0] : "results";
+		if(args.length==1){
+			fileName = args[0].replace(".dem", "");
+			append = false;
+		}
+		else{
+			fileName = "results";
+			append = true;
+		}
 
-		file = new FileOutputStream(fileName+".txt", true);
+		file = new FileOutputStream(fileName+".txt", append);
 
 		for(int i=0; i<args.length; i++){
 			demoDump = new DemoFileDump();
@@ -46,40 +58,93 @@ public class Handler{
 				demoDump.doDump();
 			s.stop();
 
-			double dumpTime = s.time();
+			dumpTime = s.time();
 
 			s.start();
 			getKDs(demoDump.getTeams(), demoDump.getHeroKillMsgs());
-			ArrayList<String> combatLog = combatLog(demoDump);
+			combatLog(demoDump);
 			s.stop();
 
-			double surfTime = s.time();		
-
-			printGameInfo(demoDump.getGameInfo(), i, dumpTime);
-			System.out.println("Dump Time: "+dumpTime);
-			System.out.println("Surf Time: "+surfTime);
-			
-//			file = new FileOutputStream("Combat Log.txt", false);
-//			for(String logEntry : combatLog)
-//				file.write((logEntry+nl).getBytes("UTF-8"));
+			surfTime = s.time();		
+			matchInfo = demoDump.getGameInfo();
+			printGameInfo(matchInfo, i, dumpTime);
+			System.out.printf("%n%s done in %.2fs", args[i], dumpTime);
 		}
+		file.close();
+
+		if(args.length==1){
+			System.out.printf("%nDemo dump surfed in %.2fs%n%n", surfTime);
+			out.write(matchInfo.getBytes("UTF-8"));	
+			showMainMenu(demoDump.getCombatEvents(), demoDump.getTeams(), fileName);
+
+		}
+
+		//		file = new FileOutputStream("Combat Log.txt", false);
+		//		for(String logEntry : combatLog)
+		//			file.write((logEntry+nl).getBytes("UTF-8"));
 	}
 
 	private static void printGameInfo(String matchInfo, int n, double dumpTime){
 		try {			
-			byte[] byteString =  (nl+"-------------------------"+(++n)+"-------------------------"+nl+nl+matchInfo).getBytes("UTF-8") ;
-
-			file.write(byteString);
-			out.write(byteString);	
-
+			file.write( (nl+"-------------------------"+(++n)+"-------------------------"+nl+nl+matchInfo).getBytes("UTF-8") );
 			file.write((nl+"Dump Time: "+dumpTime+nl).getBytes("UTF-8"));
-
 		} catch (IOException e) {
+			System.out.println("Could not write game info to file.");
 			e.printStackTrace();
 		}
+	}
 
-		//		System.out.println("\n");
-		//		out.close(); file.close();
+	private static void showMainMenu(ArrayList<CombatEvent> combatEvents, Player[] player, String fileName){
+		while(true){
+			System.out.printf("%n%40s%n", "--------Main Menu--------");
+			System.out.printf("Enter 0 to Dump entire Combat Log (%,d entries).%n", combatEvents.size());
+			System.out.printf("Enter 1 - %d to get detailed info about a hero.%n", player.length);
+			int option = getOption(player.length);
+			if(option==0){			
+				dumpCombatLog(combatEvents, fileName);
+				System.out.printf("Finished dumping to %s_combat_log.txt%n%n", fileName );
+			}
+			else showHeroMenu(player[option-1]);
+		}
+	}
+
+	private static void dumpCombatLog(ArrayList<CombatEvent> combatEvents, String fileName){
+		try {
+			file = new FileOutputStream(fileName+"_combat_log.txt", false);			
+			for(CombatEvent logEntry : combatEvents)
+				file.write((logEntry+nl).getBytes("UTF-8"));
+			file.close();
+
+		} catch (IOException e) {
+			System.out.println("Could not dump combat log.");
+			e.printStackTrace();
+		}
+	}
+
+	private static void showPlayerMenu(Player[] players){
+
+	}
+
+	private static void showHeroMenu(Player hero){
+		System.out.println(hero);
+	}
+
+	private static int getOption(int limit){
+		System.out.printf("%n#");
+		int option = -1;
+		try{
+			option = Integer.parseInt(System.console().readLine());
+			if(option<0 || option>limit){
+				System.out.printf("Input must be a number between 0 and %d%n", limit);
+				option = getOption(limit);
+			}
+		}
+		catch(NumberFormatException e){
+			System.out.printf("Input must be a number between 0 and %d%n", limit);
+			option = getOption(limit);
+		}
+
+		return option;
 	}
 
 	private static void getKDs(Player[] teams, ArrayList<CDOTAUserMsg_ChatEvent> kdHeroList){
@@ -181,38 +246,33 @@ public class Handler{
 		return null;
 	}
 
-	private static ArrayList<String> combatLog(DemoFileDump demoDump) throws IOException{
-		ArrayList<String> combatLog = new ArrayList<String>();
+	private static void combatLog(DemoFileDump demoDump) throws IOException{
 		final HashMap<String, Short> heroList = demoDump.getHeroList();
 		final ArrayList<String> combatLogNames = demoDump.getCombatLogNames();
 		ArrayList<CombatEvent> combatEvents = demoDump.getCombatEvents();
 		final HashMap<Short, Player> players = demoDump.getPlayers();
 		final Player[] teams = demoDump.getTeams();
 		final HashMap<Short, String> modifierList = demoDump.getModifierList();
-//System.out.println(combatLogNames);
-		int heroTargets = 0;
-		int deaths = 0;
-		int kills = 0;
+		//System.out.println(combatLogNames);
+
 		final int ASSIST_TLIMIT = 20;
 		final HashMap<String, Player> specialCaseHeroes = getSpecialCaseHeroes(players, heroList);
 
-//		final short helmOfDominator = (short) combatLogNames.indexOf("");
+		//		final short helmOfDominator = (short) combatLogNames.indexOf("");
 		final short trollWarlord = (short) combatLogNames.indexOf("Neutral Dark Troll Warlord");
 		final short skeletonWarrior = (short) combatLogNames.indexOf("Dark Troll Warlord Skeleton Warrior");
 		final short enragedWildkin = (short) combatLogNames.indexOf("Neutral Enraged Wildkin");
 		final short tornado = (short) combatLogNames.indexOf("Enraged Wildkin Tornado");
-		
+
 		CombatEvent skLastDeath = null;
 		CombatEvent[] lastDamagedBy = null;
 		HashSet<Float> reincarnateList = new HashSet<Float>();
 		CombatEvent lastIllusion = null;
-		
+
 		//		final short disruption = (short) combatLogNames.indexOf("modifier_shadow_demon_disruption");
 		//		final Player shadowDemon = players.get((short)combatLogNames.indexOf("npc_dota_hero_shadow_demon"));
 		//invoker
 
-		System.out.println("\nCombat Log Names: "+combatLogNames.size());
-		System.out.println("Combat Events: "+combatEvents.size());
 		boolean friendlyFire = false;
 		for(CombatEvent combatEvent : combatEvents){
 			Player target = players.get(combatEvent.targetName);
@@ -227,11 +287,11 @@ public class Handler{
 			boolean isTower = attackerName.contains("Tower");
 
 			if(target!=null && attackerSource!=null) friendlyFire = attackerSource.team.equals(target.team);
-			
+
 			switch(types[combatEvent.type]){
 			case DAMAGE: //if(attacker!=null && target!=null)heroTargets++; 
 				if(target!=null && !combatEvent.targetIllusion){
-					
+
 					if( attackerSource==null || (combatEvent.attackerIllusion && friendlyFire) ) //Morphling's illu's don't have him as source, unlike other heroes.
 						attackerSource =  findOwner(attackerName, combatEvent.attackerName, specialCaseHeroes);
 
@@ -259,8 +319,8 @@ public class Handler{
 				break;
 			case MODIFIER_GAIN: 
 				attackerSource = players.get(combatEvent.attackerName);				
-//				System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60+" with "+combatLogNames.get(combatEvent.inflictorName));
-				
+				//				System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60+" with "+combatLogNames.get(combatEvent.inflictorName));
+
 				if(inflictor.matches("Chen Holy Persuasion|Enchantress Enchant")){// |Helmf Of Dominator |Necronomicon Archer Aura
 					attackerSource.minions.add(combatEvent.targetName);
 					if(combatEvent.targetName==trollWarlord)
@@ -285,12 +345,12 @@ public class Handler{
 					reincarnateList.add(combatEvent.timeStamp);
 					attackerSource.damagedBy = lastDamagedBy;
 				}
-					
+
 				break;
 			case DEATH:	
 				if(target!=null){ //target is a hero
 					if(target.aegisTimeStamp==-1 || (combatEvent.timeStamp - target.aegisTimeStamp) > 600f){ //10mins *60
-						deaths++; 
+
 						//						target.deaths++;
 
 						if(combatEvent.targetIllusion){
@@ -332,7 +392,7 @@ public class Handler{
 							target.damagedBy = new CombatEvent[10];
 							//System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 						}
-
+						//else if(Roshan) achievement
 						else//Some unit not yet accounted for
 							System.out.println(attackerName+" killed "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 
@@ -344,8 +404,8 @@ public class Handler{
 
 								if(target.damagedBy[iAttacker]!=null && combatEvent.timeStamp - target.damagedBy[iAttacker].timeStamp<=ASSIST_TLIMIT){
 									teams[iAttacker].assists++;
-//									if(teams[iAttacker].hero.equals("Shadow Demon"))
-//										System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+									//									if(teams[iAttacker].hero.equals("Shadow Demon"))
+									//										System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 								}
 							}
 						}
@@ -356,9 +416,7 @@ public class Handler{
 							skLastDeath = combatEvent;
 						}
 						if(skRessurection && !friendlyFire && !isCreep && !isTower){
-							deaths--; 
 							//							target.deaths--;
-							kills--;
 							//							attacker.kills--;
 
 							int begin, stop;
@@ -379,16 +437,7 @@ public class Handler{
 				} break;
 			case AEGIS: teams[combatEvent.playerId].aegisTimeStamp = combatEvent.timeStamp; break;
 			}
-			combatLog.add(combatEvent.toString());
 		}
-
-		System.out.println("Damaged Hero Targets: " + heroTargets );
-		System.out.println("Total Kills: "+ kills);
-		System.out.println("Total Deaths: "+ deaths);
-		System.out.println("\nCombatLogNames HeroIDs: " + players.keySet());
-		System.out.println();
-
-		return combatLog;
 	}
 
 	private static void addAssists(){
