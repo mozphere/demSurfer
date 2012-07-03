@@ -38,6 +38,10 @@ class CombatEvent{
 		float secs = timeStamp%60;
 		int mins = (int) (timeStamp-secs)/60;
 		String time = String.format("[%02d:%05.2f]", mins, secs);
+		if(attackerIllusion)
+			attacker = attacker+"'s Illusion";
+		if(targetIllusion)
+			target = target+"'s Illusion";
 
 		switch(type){
 		case 0: 

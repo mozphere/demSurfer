@@ -85,6 +85,10 @@ public class DemoFileDump{
 	Player[] getTeams(){
 		return teams;
 	}
+	
+	PlayerInfo[] getUserList(){
+		return userList;
+	}
 
 	String getGameInfo(){
 		gameInfo.genScoreBoard(teams);
@@ -98,65 +102,74 @@ public class DemoFileDump{
 	HashMap<String, Short> getHeroList(){
 		return heroList;
 	}
-	
+
 	HashMap<Short, String> getModifierList(){
 		return modifierList;
 	}
 
-	boolean open(final String filename) throws IOException{
-		if(!m_demoFile.Open(filename)){
-			System.out.println("Couldn't open " + filename);
-			return false;
+	boolean open(final String fileName){
+		try {
+			m_demoFile.Open(fileName);
+		} catch (IOException e) {
+			System.out.println("Could not open file "+fileName);
+			System.out.println("Make sure the file is in the correct directory.");
+			System.exit(-1);
 		}
+
 		return true;
 	}
 
-	void doDump() throws IOException{
+	void doDump(){
 		boolean bStopReading = false;
 		DemoMessage message = new DemoMessage();
 		CDemoFullPacket fullPacket = null;
+		try{
+			for(m_nFrameNumber = 0; !bStopReading && !m_demoFile.isDone(); m_nFrameNumber++){
+				//						if(m_nFrameNumber==8)
+				//							bStopReading = true;
 
-		for(m_nFrameNumber = 0; !bStopReading && !m_demoFile.isDone(); m_nFrameNumber++){
-			//						if(m_nFrameNumber==8)
-			//							bStopReading = true;
+				EDemoCommands cmd = m_demoFile.readMessageType(message);
+				m_demoFile.readMessage(message, cmd);
 
-			EDemoCommands cmd = m_demoFile.readMessageType(message);
-			m_demoFile.readMessage(message, cmd);
+				switch(cmd){			
+				case DEM_FileHeader: break;
+				case DEM_FileInfo: handleGameInfo((CDemoFileInfo) message.msg); break;
+				case DEM_Stop: break;
+				case DEM_SyncTick: break;
+				case DEM_ConsoleCmd: break;
+				case DEM_SendTables: break;
+				case DEM_ClassInfo: break;
+				case DEM_StringTables: spewStringTables((CDemoStringTables) message.msg); break;
+				case DEM_UserCmd: break;
+				case DEM_CustomDataCallbacks: break;
+				case DEM_CustomData:break;
 
-			switch(cmd){			
-			case DEM_FileHeader: break;
-			case DEM_FileInfo: handleGameInfo((CDemoFileInfo) message.msg); break;
-			case DEM_Stop: break;
-			case DEM_SyncTick: break;
-			case DEM_ConsoleCmd: break;
-			case DEM_SendTables: break;
-			case DEM_ClassInfo: break;
-			case DEM_StringTables: spewStringTables((CDemoStringTables) message.msg); break;
-			case DEM_UserCmd: break;
-			case DEM_CustomDataCallbacks: break;
-			case DEM_CustomData:break;
+				case DEM_FullPacket: {
+					//					printDemoHeader(cmd, message.tick, message.size, message.uncompressed_size);
+					fullPacket = (CDemoFullPacket) message.msg;	
+					dumpDemoStringTable(fullPacket.getStringTable()); // Spew the stringtable
+					dumpDemoPacket(fullPacket.getPacket().getData()); // Ok, now the packet.
+				}break;
 
-			case DEM_FullPacket: {
-				//					printDemoHeader(cmd, message.tick, message.size, message.uncompressed_size);
-				fullPacket = (CDemoFullPacket) message.msg;	
-				dumpDemoStringTable(fullPacket.getStringTable()); // Spew the stringtable
-				dumpDemoPacket(fullPacket.getPacket().getData()); // Ok, now the packet.
-			}break;
+				case DEM_Packet:
+				case DEM_SignonPacket: {
+					//					printDemoHeader(cmd, message.tick, message.size, message.uncompressed_size);
+					CDemoPacket packet = (CDemoPacket) message.msg;
+					dumpDemoPacket(packet.getData());
+				}break;
 
-			case DEM_Packet:
-			case DEM_SignonPacket: {
-				//					printDemoHeader(cmd, message.tick, message.size, message.uncompressed_size);
-				CDemoPacket packet = (CDemoPacket) message.msg;
-				dumpDemoPacket(packet.getData());
-			}break;
-
-			default:
-			case DEM_Error:
-				bStopReading = true;
-				//				fatal_errorf( "Shouldn't ever get this demo command?!? %d\n", demoCommand );
-				break;		  			
+				default:
+				case DEM_Error:
+					bStopReading = true;
+					//				fatal_errorf( "Shouldn't ever get this demo command?!? %d\n", demoCommand );
+					break;		  			
+				}
+				//			addEntry(message.msg);
 			}
-			//			addEntry(message.msg);
+		} catch (IOException e) {
+			System.out.println("Could not dump demo info.");
+			e.printStackTrace();
+			System.exit(-1);
 		}
 	}
 
@@ -302,7 +315,7 @@ public class DemoFileDump{
 		}catch (InvalidProtocolBufferException e){
 			System.err.printf("Could not parse message %s because enum constant type %d does not exist.\n", dotaUsr_cmd, parseBuffer.byteAt(1));
 			//			e.printStackTrace();
-			System.exit(0);
+			//			System.exit(0);
 		}
 		//		msgPrintf(userMsg.getClass().getSimpleName(), userMsg.getSerializedSize(), userMsg);
 	}
@@ -399,7 +412,7 @@ public class DemoFileDump{
 			if(isCombatLog) combatEvents.add(new CombatEvent(field));
 		}
 	}
-	
+
 	void spewStringTables(CDemoStringTables stringTables) throws IOException{
 		int index = -1;
 		for(table_t table : stringTables.getTablesList()){
@@ -423,7 +436,7 @@ public class DemoFileDump{
 	void dumpDemoStringTable(CDemoStringTables stringTables) throws IOException{
 		int index = -1;
 		short itemID = 0;
-		
+
 		for(table_t table : stringTables.getTablesList())
 			for(items_t item : table.getItemsList())
 				switch(table.getTableName()){
@@ -454,10 +467,10 @@ public class DemoFileDump{
 		if(name.contains("npc_dota_hero_"))
 			heroList.put(name = fmtName(name), i);
 		else if( name.contains("modifier") )
-				modifierList.put(i, name = fmtName(name));
+			modifierList.put(i, name = fmtName(name));
 		else
 			name = fmtName(name);
-		
+
 		return name;
 	}
 
@@ -468,11 +481,11 @@ public class DemoFileDump{
 			words = name.replaceFirst("npc_dota_hero_", "").split("_");
 
 		else if( name.contains("item_") )
-				words = name.replaceFirst("item_", "").split("_");
-		
+			words = name.replaceFirst("item_", "").split("_");
+
 		else if( name.contains("modifier_") )
 			words = name.replaceFirst("modifier_", "").split("_");
-		
+
 		else if( name.contains("npc_dota_creep_") ){
 			name =  name.replaceFirst("npc_dota_creep_", "");
 			if (name.contains("goodguys"))
@@ -481,7 +494,7 @@ public class DemoFileDump{
 				name =  name.replaceFirst("badguys", "dire");
 			words = (name+"_creep").split("_");
 		}
-		
+
 		else if( name.contains("npc_dota_") ){
 			name =  name.replaceFirst("npc_dota_", "");
 			if (name.contains("goodguys"))
@@ -492,10 +505,10 @@ public class DemoFileDump{
 		}
 		else
 			words = name.split("_");
-		
-			name = "";
-			for(String w : words) name += w.replaceFirst(""+w.charAt(0), ""+(char)(w.charAt(0)-32))+" "; 
-			name = name.trim();
+
+		name = "";
+		for(String w : words) name += w.replaceFirst(""+w.charAt(0), ""+(char)(w.charAt(0)-32))+" "; 
+		name = name.trim();
 
 		return name;
 	}
@@ -514,7 +527,7 @@ public class DemoFileDump{
 		for( CPlayerInfo pi : demoInfo.getPlayerInfoList() ){
 			String heroName =  fmtName(pi.getHeroName());
 			heroIndx = (short) combatLogNames.indexOf(heroName);
-		
+
 			tmpWidth = (byte) heroName.length();
 			if(tmpWidth>hWidth) hWidth = tmpWidth;
 
@@ -532,7 +545,7 @@ public class DemoFileDump{
 			p.hero = heroName;
 			p.slotID = i;
 			p.team = i<5 ? "Radiant" : "Dire";
-//			System.out.println(p.gold/(gameInfo.gameLength/60f));
+			//			System.out.println(p.gold/(gameInfo.gameLength/60f));
 			players.put(heroIndx, p);			
 			teams[i++] = p;
 		}

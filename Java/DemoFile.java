@@ -5,12 +5,13 @@ import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 
 public class DemoFile{	
 
-//	private static final int DEMOFILE_FULLPACKETS_VERSION = 2;
+	//	private static final int DEMOFILE_FULLPACKETS_VERSION = 2;
 	private CodedInputStream m_fileBuffer;
 
 	boolean Open(final String name) throws IOException{
@@ -20,35 +21,36 @@ public class DemoFile{
 		FILE_INFO_OFFSET = 5, //'\0' terminator + int
 		SIZE_OF_DOTA_DEMO_HEADER = DEMO_FILE_STAMP+FILE_INFO_OFFSET;
 
-		RandomAccessFile fp = new RandomAccessFile(name, "r");
-		int length = (int) fp.length();
+		RandomAccessFile fp;
+			fp = new RandomAccessFile(name, "r");
 
-		if(length < SIZE_OF_DOTA_DEMO_HEADER){
-			System.out.println("CDemoFile::Open: file too small." + name);
-			return false;
-		}
+			int length = (int) fp.length();
 
-		byte[] fileStamp = new byte[DEMO_FILE_STAMP];
-		fp.read(fileStamp);
+			if(length < SIZE_OF_DOTA_DEMO_HEADER){
+				System.out.println("CDemoFile::Open: file too small." + name);
+				return false;
+			}
 
-		if(! new String(fileStamp).equals(PROTODEMO_HEADER_ID)){
-			System.out.println("CDemoFile::Open: demofilestamp doesn't match " + name);
-			return false;
-		}
+			byte[] fileStamp = new byte[DEMO_FILE_STAMP];
+			fp.read(fileStamp);
 
-		fp.skipBytes(FILE_INFO_OFFSET);
-		length -= SIZE_OF_DOTA_DEMO_HEADER;
+			if(! new String(fileStamp).equals(PROTODEMO_HEADER_ID)){
+				System.out.println("CDemoFile::Open: demofilestamp doesn't match " + name);
+				return false;
+			}
 
-		byte[] buf = new byte[length];
-		fp.read(buf);
+			fp.skipBytes(FILE_INFO_OFFSET);
+			length -= SIZE_OF_DOTA_DEMO_HEADER;
 
-		m_fileBuffer = CodedInputStream.newInstance(buf);
+			byte[] buf = new byte[length];
+			fp.read(buf);
 
-		if(length==0){
-			System.out.println("CDemoFile::Open: couldn't open file " + name);
-			return false;
-		}
+			m_fileBuffer = CodedInputStream.newInstance(buf);
 
+			if(length==0){
+				System.out.println("CDemoFile::Open: couldn't open file " + name);
+				return false;
+			}
 		return true;
 	}
 

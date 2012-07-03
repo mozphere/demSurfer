@@ -1,3 +1,4 @@
+import java.util.ArrayList;
 import java.util.HashSet;
 
 	class Player{
@@ -7,6 +8,8 @@ import java.util.HashSet;
 		short kills;
 		short deaths;
 		short assists;
+		ArrayList<CombatEvent> killEvents = new ArrayList<CombatEvent>();
+		ArrayList<CombatEvent> deathEvents = new ArrayList<CombatEvent>();
 		float gold;
 		float aegisTimeStamp = -1;
 		short slotID;

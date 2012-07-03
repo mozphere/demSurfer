@@ -1,4 +1,5 @@
 import java.io.DataOutputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -22,7 +23,7 @@ public class Handler{
 	static final String nl = System.lineSeparator();
 	static FileOutputStream file;
 
-	public static void main(String[] args) throws IOException{
+	public static void main(String[] args){
 		//		args = new String[1];
 		//		args[0] = "19934308.dem";
 
@@ -48,37 +49,36 @@ public class Handler{
 			append = true;
 		}
 
-		file = new FileOutputStream(fileName+".txt", append);
+		try {
+			file = new FileOutputStream(fileName+".txt", append);
 
-		for(int i=0; i<args.length; i++){
-			demoDump = new DemoFileDump();
-
-			s.start();
-			if(demoDump.open(args[i]))
+			for(int i=0; i<args.length; i++){
+				demoDump = new DemoFileDump();
+				demoDump.open(args[i]);
+				s.start();
 				demoDump.doDump();
-			s.stop();
+				getKDs(demoDump.getTeams(), demoDump.getHeroKillMsgs());
+				combatLog(demoDump);
+				s.stop();
+				dumpTime = s.time();
 
-			dumpTime = s.time();
+				matchInfo = demoDump.getGameInfo();
+				printGameInfo(matchInfo, i, dumpTime);
+				System.out.printf("%n%s Surfed in %.2fs%n%n", args[i], dumpTime);
+			}
+			file.close();
 
-			s.start();
-			getKDs(demoDump.getTeams(), demoDump.getHeroKillMsgs());
-			combatLog(demoDump);
-			s.stop();
+			if(args.length==1){
+				out.write(matchInfo.getBytes("UTF-8"));	
+				System.out.printf("%n*Match info above also written to %s.txt%n", fileName );
+				showMainMenu(demoDump.getCombatEvents(), demoDump.getTeams(), fileName, demoDump.getUserList());
+			}
+			else
+				System.out.printf("%n%nMatches info written to %s.txt%n", fileName );
 
-			surfTime = s.time();		
-			matchInfo = demoDump.getGameInfo();
-			printGameInfo(matchInfo, i, dumpTime);
-			System.out.printf("%n%s done in %.2fs", args[i], dumpTime);
+		} catch (IOException e) {
+			System.err.println("Could not write game info to file."+fileName);
 		}
-		file.close();
-
-		if(args.length==1){
-			System.out.printf("%nDemo dump surfed in %.2fs%n%n", surfTime);
-			out.write(matchInfo.getBytes("UTF-8"));	
-			showMainMenu(demoDump.getCombatEvents(), demoDump.getTeams(), fileName);
-
-		}
-
 		//		file = new FileOutputStream("Combat Log.txt", false);
 		//		for(String logEntry : combatLog)
 		//			file.write((logEntry+nl).getBytes("UTF-8"));
@@ -89,23 +89,31 @@ public class Handler{
 			file.write( (nl+"-------------------------"+(++n)+"-------------------------"+nl+nl+matchInfo).getBytes("UTF-8") );
 			file.write((nl+"Dump Time: "+dumpTime+nl).getBytes("UTF-8"));
 		} catch (IOException e) {
-			System.out.println("Could not write game info to file.");
-			e.printStackTrace();
+			System.err.println("Could not write game info to file.");
 		}
 	}
 
-	private static void showMainMenu(ArrayList<CombatEvent> combatEvents, Player[] player, String fileName){
-		while(true){
+	private static void showMainMenu(ArrayList<CombatEvent> combatEvents, Player[] player, String fileName, PlayerInfo[] userList){
+		int option = -1;
+		do{
 			System.out.printf("%n%40s%n", "--------Main Menu--------");
-			System.out.printf("Enter 0 to Dump entire Combat Log (%,d entries).%n", combatEvents.size());
-			System.out.printf("Enter 1 - %d to get detailed info about a hero.%n", player.length);
-			int option = getOption(player.length);
-			if(option==0){			
+			System.out.printf("0 - Exit.%n");
+			System.out.printf("1 - Dump entire Combat Log (%,d entries).%n", combatEvents.size());
+			System.out.printf("2 - Get detailed hero K/D/A and Achievements.%n");
+			System.out.printf("3 - Get player info.%n");
+			option = getOption(3);
+			if(option==1){			
 				dumpCombatLog(combatEvents, fileName);
 				System.out.printf("Finished dumping to %s_combat_log.txt%n%n", fileName );
 			}
-			else showHeroMenu(player[option-1]);
-		}
+			else if(option==2){
+				showHeroMainMenu(player, fileName);
+			}
+			else if(option==3){
+				for(PlayerInfo user : userList)
+					if(user!=null) System.out.printf("%-20s %s%n", user.gUID, user.name);
+			}
+		}while(option!=0);
 	}
 
 	private static void dumpCombatLog(ArrayList<CombatEvent> combatEvents, String fileName){
@@ -116,31 +124,70 @@ public class Handler{
 			file.close();
 
 		} catch (IOException e) {
-			System.out.println("Could not dump combat log.");
-			e.printStackTrace();
+			System.err.println("Could not write combat log to file "+fileName);
 		}
 	}
 
-	private static void showPlayerMenu(Player[] players){
+	private static void showPlayerMenu(Player[] player){
 
+	}
+
+	private static void showHeroMainMenu(Player[] player, String fileName){
+		int option = -1;
+		do{
+			System.out.printf("%n%40s%n", "--------Hero Main Menu--------");
+			System.out.printf("0 - Go back to Main Menu.%n");
+			for(int i=1; i<=player.length; i++){
+				System.out.printf("%2d - %s%n", i, player[i-1].hero);
+				//				if(i==player.length/2 || i==player.length)
+				//					System.out.printf("%n");
+			}
+
+			option = getOption(player.length);
+			if(option!=0)
+				showHeroMenu(player[option-1]);
+
+		}while(option!=0);
 	}
 
 	private static void showHeroMenu(Player hero){
-		System.out.println(hero);
+		int option = -1;
+		do{
+			System.out.printf("%n%40s%n", "--------Hero Menu--------");
+			System.out.printf("%s%n%n", hero);
+			System.out.printf("0 - Go back to Hero Main Menu.%n");
+			System.out.printf("%2d - Kills%n", 1);
+			System.out.printf("%2d - Deaths%n", 2);
+			System.out.printf("%2d - Assists%n", 3);
+			System.out.printf("%2d - Achievements%n", 4);
+
+			option = getOption(4);
+			if(option==1)
+				System.out.println("kills");
+			if(option==2){
+				for(CombatEvent death : hero.deathEvents)
+					System.out.println(death);
+			}
+			if(option==3)
+				System.out.println("assists");
+			if(option==4)
+				System.out.println("achievements");
+
+		}while(option!=0);
 	}
 
 	private static int getOption(int limit){
-		System.out.printf("%n#");
+		System.out.printf("%nOption #");
 		int option = -1;
 		try{
 			option = Integer.parseInt(System.console().readLine());
 			if(option<0 || option>limit){
-				System.out.printf("Input must be a number between 0 and %d%n", limit);
+				System.err.printf("Input must be a number between 0 and %d%n", limit);
 				option = getOption(limit);
 			}
 		}
 		catch(NumberFormatException e){
-			System.out.printf("Input must be a number between 0 and %d%n", limit);
+			System.err.printf("Input must be a number between 0 and %d%n", limit);
 			option = getOption(limit);
 		}
 
@@ -246,7 +293,7 @@ public class Handler{
 		return null;
 	}
 
-	private static void combatLog(DemoFileDump demoDump) throws IOException{
+	private static void combatLog(DemoFileDump demoDump){
 		final HashMap<String, Short> heroList = demoDump.getHeroList();
 		final ArrayList<String> combatLogNames = demoDump.getCombatLogNames();
 		ArrayList<CombatEvent> combatEvents = demoDump.getCombatEvents();
@@ -351,7 +398,8 @@ public class Handler{
 				if(target!=null){ //target is a hero
 					if(target.aegisTimeStamp==-1 || (combatEvent.timeStamp - target.aegisTimeStamp) > 600f){ //10mins *60
 
-						//						target.deaths++;
+						//target.deaths++;
+						target.deathEvents.add(combatEvent);
 
 						if(combatEvent.targetIllusion){
 							System.out.println("illusions deaths shouldn't count towards a hero's kills or deaths");
