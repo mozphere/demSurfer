@@ -24,8 +24,8 @@ public class Handler{
 	static FileOutputStream file;
 
 	public static void main(String[] args){
-		//		args = new String[1];
-		//		args[0] = "19934308.dem";
+		//				args = new String[1];
+		//				args[0] = "14612633.dem";
 
 		String fileName = "ERROR";
 		boolean append;
@@ -57,24 +57,25 @@ public class Handler{
 				demoDump.open(args[i]);
 				s.start();
 				demoDump.doDump();
-				getKDs(demoDump.getTeams(), demoDump.getHeroKillMsgs());
+				getKDs(demoDump.getTeams(), demoDump.getHeroKills());
 				combatLog(demoDump);
 				s.stop();
 				dumpTime = s.time();
 
 				matchInfo = demoDump.getGameInfo();
 				printGameInfo(matchInfo, i, dumpTime);
-				System.out.printf("%n%s Surfed in %.2fs%n%n", args[i], dumpTime);
+				System.out.printf("%n%s Surfed in %.2fs", args[i], dumpTime);
 			}
 			file.close();
 
 			if(args.length==1){
+				System.out.printf("%n%n");
 				out.write(matchInfo.getBytes("UTF-8"));	
 				System.out.printf("%n*Match info above also written to %s.txt%n", fileName );
 				showMainMenu(demoDump.getCombatEvents(), demoDump.getTeams(), fileName, demoDump.getUserList());
 			}
 			else
-				System.out.printf("%n%nMatches info written to %s.txt%n", fileName );
+				System.out.printf("%n%n*Matches info written to %s.txt%n", fileName );
 
 		} catch (IOException e) {
 			System.err.println("Could not write game info to file."+fileName);
@@ -93,7 +94,7 @@ public class Handler{
 		}
 	}
 
-	private static void showMainMenu(ArrayList<CombatEvent> combatEvents, Player[] player, String fileName, PlayerInfo[] userList){
+	private static void showMainMenu(ArrayList<CombatEvent> combatEvents, Player[] player, String fileName, PlayerInfo[] userList) throws UnsupportedEncodingException, IOException{
 		int option = -1;
 		do{
 			System.out.printf("%n%40s%n", "--------Main Menu--------");
@@ -111,7 +112,7 @@ public class Handler{
 			}
 			else if(option==3){
 				for(PlayerInfo user : userList)
-					if(user!=null) System.out.printf("%-20s %s%n", user.gUID, user.name);
+					if(user!=null) out.write(String.format("%-20s %s%n", user.gUID, user.name).getBytes("UTF-8"));
 			}
 		}while(option!=0);
 	}
@@ -163,15 +164,17 @@ public class Handler{
 
 			option = getOption(4);
 			if(option==1)
-				System.out.println("kills");
-			if(option==2){
+				for(CombatEvent kill : hero.killEvents)
+					System.out.println(kill);
+			if(option==2)
 				for(CombatEvent death : hero.deathEvents)
 					System.out.println(death);
-			}
 			if(option==3)
-				System.out.println("assists");
+				for(CombatEvent assist : hero.assistEvents)
+					System.out.println(assist);
 			if(option==4)
-				System.out.println("achievements");
+				for(CombatEvent achievement : hero.achievements)
+					System.out.println(achievement);
 
 		}while(option!=0);
 	}
@@ -180,7 +183,7 @@ public class Handler{
 		System.out.printf("%nOption #");
 		int option = -1;
 		try{
-			option = Integer.parseInt(System.console().readLine());
+			option = Integer.parseInt(System.console().readLine().trim());
 			if(option<0 || option>limit){
 				System.err.printf("Input must be a number between 0 and %d%n", limit);
 				option = getOption(limit);
@@ -194,42 +197,44 @@ public class Handler{
 		return option;
 	}
 
-	private static void getKDs(Player[] teams, ArrayList<CDOTAUserMsg_ChatEvent> kdHeroList){
+	private static void getKDs(Player[] teams, ArrayList<HeroKill> heroKills){
 		int lastTarget = -1;
 		String type = "";
 
-		for(CDOTAUserMsg_ChatEvent heroKill : kdHeroList){
-			type = heroKill.getType().toString();
+		for(HeroKill kd : heroKills){
+			CDOTAUserMsg_ChatEvent msg = kd.chatMsg;
+			type = msg.getType().toString();
 			//			if(teams[heroKill.getPlayerid2()].hero.equals("Sven"))
 			//				System.out.println(teams[heroKill.getPlayerid2()].hero+" -> "+teams[heroKill.getPlayerid1()].hero);
 
 			if(type.equals("CHAT_MESSAGE_HERO_KILL")){
-				if(heroKill.getPlayerid3()==-1){
-					if(heroKill.getValue()!=0){
-						teams[heroKill.getPlayerid2()].kills++;
-						teams[heroKill.getPlayerid1()].deaths++;
-						lastTarget = heroKill.getPlayerid1();	
+				if(msg.getPlayerid3()==-1){
+					if(msg.getValue()!=0 && msg.getPlayerid2()!=-1){
+						teams[msg.getPlayerid2()].killEvents.add(kd.combatEvent);
+						teams[msg.getPlayerid1()].deathEvents.add(kd.combatEvent);
+						lastTarget = msg.getPlayerid1();	
 					}
-					else{//neutral kills hero
-						teams[heroKill.getPlayerid1()].deaths++;
+					else{//neutral, creep, tower, or fountain kills hero. No assists.
+						teams[msg.getPlayerid1()].deathEvents.add(kd.combatEvent);
 					}
 				}
 				else{//kill by creep, tower, or fountain and gold split among assists
-					teams[heroKill.getPlayerid1()].deaths++;
-					if(heroKill.getPlayerid2()!=-1) teams[heroKill.getPlayerid2()].assists++;
-					if(heroKill.getPlayerid3()!=-1) teams[heroKill.getPlayerid3()].assists++;
-					if(heroKill.getPlayerid4()!=-1) teams[heroKill.getPlayerid4()].assists++;
-					if(heroKill.getPlayerid5()!=-1) teams[heroKill.getPlayerid5()].assists++;
-					if(heroKill.getPlayerid6()!=-1) teams[heroKill.getPlayerid6()].assists++;
+					teams[msg.getPlayerid1()].deathEvents.add(kd.combatEvent);
+					if(msg.getPlayerid2()!=-1) teams[msg.getPlayerid2()].addAssist(kd.combatEvent);
+					if(msg.getPlayerid3()!=-1) teams[msg.getPlayerid3()].addAssist(kd.combatEvent);
+					if(msg.getPlayerid4()!=-1) teams[msg.getPlayerid4()].addAssist(kd.combatEvent);
+					if(msg.getPlayerid5()!=-1) teams[msg.getPlayerid5()].addAssist(kd.combatEvent);
+					if(msg.getPlayerid6()!=-1) teams[msg.getPlayerid6()].addAssist(kd.combatEvent);
 				}
 			}
-			else if(type.equals("CHAT_MESSAGE_STREAK_KILL") && heroKill.getPlayerid4()!=lastTarget){
-				teams[heroKill.getPlayerid1()].kills++;
-				teams[heroKill.getPlayerid4()].deaths++;				
+			else if(type.equals("CHAT_MESSAGE_STREAK_KILL") && msg.getPlayerid4()!=lastTarget){
+				teams[msg.getPlayerid1()].killEvents.add(kd.combatEvent);
+				teams[msg.getPlayerid4()].deathEvents.add(kd.combatEvent);			
 			}
-			else if(type.equals("CHAT_MESSAGE_HERO_DENY"))
-				teams[heroKill.getPlayerid1()].deaths++;
-			//teams[heroKill.getPlayerid2()] deny achievement
+			else if(type.equals("CHAT_MESSAGE_HERO_DENY")){
+				teams[msg.getPlayerid1()].deathEvents.add(kd.combatEvent);
+				teams[msg.getPlayerid2()].achievements.add(kd.combatEvent);
+			}
 		}
 	}
 
@@ -386,7 +391,7 @@ public class Handler{
 					if(attackerSource.slotID < 5){ begin=5; stop=10;} else {begin=0; stop=5;}
 					for(int iAttacker=begin; iAttacker<stop; iAttacker++){
 						if(attackerSource.damagedBy[iAttacker]!=null && skLastDeath.timeStamp - attackerSource.damagedBy[iAttacker].timeStamp<= ASSIST_TLIMIT){
-							teams[iAttacker].assists--;
+							teams[iAttacker].assistEvents.remove(teams[iAttacker].assistEvents.size()-1);
 						}
 					}
 					reincarnateList.add(combatEvent.timeStamp);
@@ -399,7 +404,7 @@ public class Handler{
 					if(target.aegisTimeStamp==-1 || (combatEvent.timeStamp - target.aegisTimeStamp) > 600f){ //10mins *60
 
 						//target.deaths++;
-						target.deathEvents.add(combatEvent);
+						//						target.deathEvents.add(combatEvent);
 
 						if(combatEvent.targetIllusion){
 							System.out.println("illusions deaths shouldn't count towards a hero's kills or deaths");
@@ -436,24 +441,29 @@ public class Handler{
 								attackerSource = teams[i];
 							}
 						}
-						else if(isNeutral){//should be kill by a neutral achievement
-							target.damagedBy = new CombatEvent[10];
-							//System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+						else if(isNeutral){
+							target.damagedBy = new CombatEvent[10]; //No assists
+							target.achievements.add(combatEvent);
 						}
-						//else if(Roshan) achievement
+						else if(attackerName.equals("Roshan"))
+							target.achievements.add(combatEvent);
+						else if(attackerName.contains("Fountain"))
+							target.achievements.add(combatEvent);
 						else//Some unit not yet accounted for
-							System.out.println(attackerName+" killed "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+							System.out.println(attackerName+" killed "+targetName+" at "+combatEvent.timeStamp/60);
 
 
 						if(!friendlyFire && !isCreep && !isTower){
 							int start, end;
 							if(target.slotID < 5){ start=5; end=10;} else {start=0; end=5;}
 							for(int iAttacker=start; iAttacker<end; iAttacker++){
-
-								if(target.damagedBy[iAttacker]!=null && combatEvent.timeStamp - target.damagedBy[iAttacker].timeStamp<=ASSIST_TLIMIT){
-									teams[iAttacker].assists++;
-									//									if(teams[iAttacker].hero.equals("Shadow Demon"))
-									//										System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+								if(target.damagedBy[iAttacker]!=null){
+									CombatEvent assitEvent = target.damagedBy[iAttacker];
+									if(combatEvent.timeStamp - assitEvent.timeStamp <= ASSIST_TLIMIT){
+										teams[iAttacker].addAssist(assitEvent);
+										//if(teams[iAttacker].hero.equals("Shadow Demon"))
+										//		System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+									}
 								}
 							}
 						}
@@ -471,7 +481,7 @@ public class Handler{
 							if(target.slotID < 5){ begin=5; stop=10;} else {begin=0; stop=5;}
 							for(int iAttacker=begin; iAttacker<stop; iAttacker++){
 								if(target.damagedBy[iAttacker]!=null && combatEvent.timeStamp - target.damagedBy[iAttacker].timeStamp<=ASSIST_TLIMIT){
-									teams[iAttacker].assists--;
+									teams[iAttacker].assistEvents.remove(teams[iAttacker].assistEvents.size()-1);
 									target.damagedBy[iAttacker] = null;
 								}
 							}

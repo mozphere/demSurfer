@@ -32,6 +32,7 @@ public class DemoFileDump{
 	private DemoFile m_demoFile;
 	private CSVCMsg_GameEventList m_GameEventList;
 	private ArrayList<String> combatLogNames;
+	private ArrayList<String> logNames;
 	private ArrayList<String> modifierNames;
 	private ArrayList<CombatEvent> combatEvents;
 	public HashSet<Integer> resurrectionList;
@@ -40,7 +41,7 @@ public class DemoFileDump{
 	private HashMap<Short, Player> players;
 	private Player[] teams;
 	private int m_nFrameNumber;
-	private ArrayList<CDOTAUserMsg_ChatEvent> heroKillMsgs;
+	private ArrayList<HeroKill> heroKills;
 	private int reincarnation;
 	private GameInfo gameInfo;
 	private String combatSummary;
@@ -50,17 +51,19 @@ public class DemoFileDump{
 	private float lastGameTime;
 	private HashMap<String, Short> heroList;
 	private HashMap<Short, String> modifierList;
+	private CombatEvent lastDeath;
 
 	DemoFileDump(){
 		m_demoFile = new DemoFile();
 		combatLogNames = new ArrayList<String>();
+		logNames = new ArrayList<String>();
 		modifierNames = new ArrayList<String>();
 		combatEvents = new ArrayList<CombatEvent>();
 		resurrectionList = new HashSet<Integer>();
 		userInfo = new HashMap<String, PlayerInfo>();
 		userList = new PlayerInfo[64];
 		players = new HashMap<Short, Player>();
-		heroKillMsgs =  new ArrayList<CDOTAUserMsg_ChatEvent>();
+		heroKills =  new ArrayList<HeroKill>();
 		gameInfo = new GameInfo();
 		combatSummary = "\nCOMBAT SUMMARY\n";
 		tmp = "";
@@ -95,8 +98,8 @@ public class DemoFileDump{
 		return gameInfo.toString();
 	}
 
-	ArrayList<CDOTAUserMsg_ChatEvent> getHeroKillMsgs(){
-		return heroKillMsgs;
+	ArrayList<HeroKill> getHeroKills(){
+		return heroKills;
 	}
 
 	HashMap<String, Short> getHeroList(){
@@ -323,9 +326,9 @@ public class DemoFileDump{
 	Message handleChatMsg(CDOTAUserMsg_ChatEvent msg){
 		switch(msg.getType()){
 		case CHAT_MESSAGE_AEGIS: combatEvents.add(new CombatEvent((short) msg.getPlayerid1(), combatEvents.get(combatEvents.size()-1).timeStamp)); break;
-		case CHAT_MESSAGE_HERO_KILL: heroKillMsgs.add(msg); break;
-		case CHAT_MESSAGE_STREAK_KILL: heroKillMsgs.add(msg); break;
-		case CHAT_MESSAGE_HERO_DENY: heroKillMsgs.add(msg); break;
+		case CHAT_MESSAGE_HERO_KILL:
+		case CHAT_MESSAGE_STREAK_KILL:
+		case CHAT_MESSAGE_HERO_DENY: heroKills.add(new HeroKill(msg, lastDeath)); break;
 		//		case CHAT_MESSAGE_REPORT_REMINDER:gameInfo.setStartTime(lastGameTime); break;
 		}
 		return msg;
@@ -409,7 +412,13 @@ public class DemoFileDump{
 
 				if(isCombatLog) field[i] = v;
 			}
-			if(isCombatLog) combatEvents.add(new CombatEvent(field));
+			if(isCombatLog){
+				CombatEvent combatEvent = new CombatEvent(field);
+				combatEvents.add(combatEvent);
+				if(combatEvent.type==4 && logNames.size() > combatEvent.targetName  && logNames.get(combatEvent.targetName).contains("hero")){
+					lastDeath = combatEvent;
+				}
+			}
 		}
 	}
 
@@ -456,6 +465,7 @@ public class DemoFileDump{
 				case "CombatLogNames":
 					itemID++;
 					if(itemID>prevID){
+						logNames.add(item.getStr());
 						combatLogNames.add( fmtFilter(item.getStr(), prevID) );
 						prevID = itemID;
 					}
