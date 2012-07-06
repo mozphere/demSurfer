@@ -12,8 +12,12 @@ class CombatEvent{
 	short targetSourceName; 
 
 	String logStr;
+	String time;
+	String attacker;
+	String target;
+	String inflictor;
 
-	short playerId;
+	short playerId = -1;
 	CombatEvent(short id, float time){
 		type = 5; //AEGIS
 		playerId = id;
@@ -35,9 +39,14 @@ class CombatEvent{
 	}
 
 	public void fmtLogStr(String attacker, String target, String inflictor){
+		this.attacker = attacker;
+		this.target = target;
+		this.inflictor = inflictor;
+		
 		float secs = timeStamp%60;
 		int mins = (int) (timeStamp-secs)/60;
-		String time = String.format("[%02d:%05.2f]", mins, secs);
+		time = String.format("[%02d:%05.2f]", mins, secs);;
+		
 		if(attackerIllusion)
 			attacker = attacker+"'s Illusion";
 		if(targetIllusion)
@@ -67,7 +76,7 @@ class CombatEvent{
 		case 3: logStr = String.format("%s %s loses %s.", time, target, inflictor); break;
 		case 4:
 			if(inflictor.equals("Aegis"))
-				logStr = String.format("%s %s ressurects %s.", time, inflictor, target);
+				logStr = String.format("%s %s will ressurect %s.", time, inflictor, target);
 			else if(inflictorName==0)
 				logStr = String.format("%s %s is killed by %s.", time, target, attacker);
 			else if(attackerName==targetName)
@@ -75,7 +84,7 @@ class CombatEvent{
 			else
 				logStr = String.format("%s %s is killed by %s's %s.", time, target, attacker, inflictor.replaceFirst(attacker+" ", "") );
 			break;
-		case 5: break;
+		case 5: logStr = String.format("%s %s picks up %s.", time, target, inflictor); break;
 		}
 	}
 

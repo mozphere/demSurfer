@@ -100,9 +100,10 @@ public class Handler{
 			System.out.printf("%n%40s%n", "--------Main Menu--------");
 			System.out.printf("0 - Exit.%n");
 			System.out.printf("1 - Dump entire Combat Log (%,d entries).%n", combatEvents.size());
-			System.out.printf("2 - Get detailed hero K/D/A and Achievements.%n");
-			System.out.printf("3 - Get player info.%n");
-			option = getOption(3);
+			System.out.printf("2 - Detailed hero K/D/A and Achievements.%n");
+			System.out.printf("3 - All achievements and fails in this match.%n");
+			System.out.printf("4 - Players info.%n");
+			option = getOption(4);
 			if(option==1){			
 				dumpCombatLog(combatEvents, fileName);
 				System.out.printf("Finished dumping to %s_combat_log.txt%n%n", fileName );
@@ -111,10 +112,21 @@ public class Handler{
 				showHeroMainMenu(player, fileName);
 			}
 			else if(option==3){
+				for(Player p : player){
+					if(!p.achievements.isEmpty()) out.write(String.format("%n%s%n", p.name, p.hero).getBytes("UTF-8"));
+					for(String a : p.achievements)
+						System.out.println(a);
+				}
+			}
+			else if(option==4){
 				for(PlayerInfo user : userList)
 					if(user!=null) out.write(String.format("%-20s %s%n", user.gUID, user.name).getBytes("UTF-8"));
 			}
 		}while(option!=0);
+	}
+	
+	private static void getAllAchievements(){
+
 	}
 
 	private static void dumpCombatLog(ArrayList<CombatEvent> combatEvents, String fileName){
@@ -173,7 +185,7 @@ public class Handler{
 				for(CombatEvent assist : hero.assistEvents)
 					System.out.println(assist);
 			if(option==4)
-				for(CombatEvent achievement : hero.achievements)
+				for(String achievement : hero.achievements)
 					System.out.println(achievement);
 
 		}while(option!=0);
@@ -210,6 +222,7 @@ public class Handler{
 			if(type.equals("CHAT_MESSAGE_HERO_KILL")){
 				if(msg.getPlayerid3()==-1){
 					if(msg.getValue()!=0 && msg.getPlayerid2()!=-1){
+						kd.combatEvent.playerId = (short) msg.getPlayerid2();
 						teams[msg.getPlayerid2()].killEvents.add(kd.combatEvent);
 						teams[msg.getPlayerid1()].deathEvents.add(kd.combatEvent);
 						lastTarget = msg.getPlayerid1();	
@@ -228,12 +241,13 @@ public class Handler{
 				}
 			}
 			else if(type.equals("CHAT_MESSAGE_STREAK_KILL") && msg.getPlayerid4()!=lastTarget){
+				kd.combatEvent.playerId = (short) msg.getPlayerid1();
 				teams[msg.getPlayerid1()].killEvents.add(kd.combatEvent);
 				teams[msg.getPlayerid4()].deathEvents.add(kd.combatEvent);			
 			}
 			else if(type.equals("CHAT_MESSAGE_HERO_DENY")){
+				kd.combatEvent.playerId = (short) msg.getPlayerid2();
 				teams[msg.getPlayerid1()].deathEvents.add(kd.combatEvent);
-				teams[msg.getPlayerid2()].achievements.add(kd.combatEvent);
 			}
 		}
 	}
@@ -415,12 +429,30 @@ public class Handler{
 
 						if(attackerSource==null ||(combatEvent.attackerIllusion && friendlyFire))
 							attackerSource =  findOwner(attackerName, combatEvent.attackerName, specialCaseHeroes);
+						
+						if(attackerSource==null && combatEvent.playerId!=-1)
+							attackerSource =  teams[combatEvent.playerId];
 
 						if(attackerSource!=null){
-							//if(target.damagedBy[attacker.slotID]==null)
-							//KS Achievement
+							friendlyFire = attackerSource.team.equals(target.team);
+							
+							if(target.damagedBy[attackerSource.slotID]==null && !friendlyFire){
+								boolean ks = false;
+								for(CombatEvent assistEvent : target.damagedBy){			
+									if(assistEvent!=null && combatEvent.timeStamp - assistEvent.timeStamp<=ASSIST_TLIMIT){
+										ks = true;
+										break;
+									}								
+								}
+								if(ks) attackerSource.addAchievement(combatEvent, A.KS);
+							}
+														
 							if(friendlyFire){
 								//grant deny achievement or suicide
+								if(attackerSource.hero.equals(targetName))
+									attackerSource.addAchievement(combatEvent, A.SUICIDE);
+								else
+									attackerSource.addAchievement(combatEvent, A.HERO_DENY);
 								//System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 							}
 
@@ -443,12 +475,12 @@ public class Handler{
 						}
 						else if(isNeutral){
 							target.damagedBy = new CombatEvent[10]; //No assists
-							target.achievements.add(combatEvent);
+							target.addAchievement(combatEvent, A.NEUTRAL_KILL);
 						}
 						else if(attackerName.equals("Roshan"))
-							target.achievements.add(combatEvent);
+							target.addAchievement(combatEvent, A.ROSHAN_KILL);
 						else if(attackerName.contains("Fountain"))
-							target.achievements.add(combatEvent);
+							target.addAchievement(combatEvent, A.FOUNTAIN_KILL);
 						else//Some unit not yet accounted for
 							System.out.println(attackerName+" killed "+targetName+" at "+combatEvent.timeStamp/60);
 
@@ -492,13 +524,17 @@ public class Handler{
 						combatEvent.fmtLogStr(attackerName, targetName, "Aegis");
 					}
 
-				} break;
-			case AEGIS: teams[combatEvent.playerId].aegisTimeStamp = combatEvent.timeStamp; break;
+				}
+				else if(targetName.contains("Fort") && attackerSource!=null)
+					attackerSource.addAchievement(combatEvent, A.THRONE_LH);
+				else if(targetName.equals("Roshan") && attackerSource!=null)
+					attackerSource.addAchievement(combatEvent, A.ROSHAN_LH);
+				break;
+			case AEGIS:
+				combatEvent.fmtLogStr("", teams[combatEvent.playerId].hero, "Aegis");
+				teams[combatEvent.playerId].aegisTimeStamp = combatEvent.timeStamp;
+				break;
 			}
 		}
-	}
-
-	private static void addAssists(){
-
 	}
 }
