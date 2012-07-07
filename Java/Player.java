@@ -30,7 +30,7 @@ class Player{
 		assistEvents.add(i, assist);				
 	}
 
-	public void addAchievement(CombatEvent achievement, A type){
+	public void addAchievement(CombatEvent achievement, Achievement type){
 		String fmt = "No Achievements";
 		
 		switch(type){

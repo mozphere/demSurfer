@@ -1,5 +1,4 @@
 import java.io.DataOutputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -24,8 +23,8 @@ public class Handler{
 	static FileOutputStream file;
 
 	public static void main(String[] args){
-		//				args = new String[1];
-		//				args[0] = "14612633.dem";
+//		args = new String[1];
+//		args[0] = "24482167.dem";
 
 		String fileName = "ERROR";
 		boolean append;
@@ -80,15 +79,12 @@ public class Handler{
 		} catch (IOException e) {
 			System.err.println("Could not write game info to file."+fileName);
 		}
-		//		file = new FileOutputStream("Combat Log.txt", false);
-		//		for(String logEntry : combatLog)
-		//			file.write((logEntry+nl).getBytes("UTF-8"));
 	}
 
 	private static void printGameInfo(String matchInfo, int n, double dumpTime){
 		try {			
 			file.write( (nl+"-------------------------"+(++n)+"-------------------------"+nl+nl+matchInfo).getBytes("UTF-8") );
-			file.write((nl+"Dump Time: "+dumpTime+nl).getBytes("UTF-8"));
+			//			file.write((nl+"Dump Time: "+dumpTime+nl).getBytes("UTF-8"));
 		} catch (IOException e) {
 			System.err.println("Could not write game info to file.");
 		}
@@ -124,7 +120,7 @@ public class Handler{
 			}
 		}while(option!=0);
 	}
-	
+
 	private static void getAllAchievements(){
 
 	}
@@ -195,7 +191,9 @@ public class Handler{
 		System.out.printf("%nOption #");
 		int option = -1;
 		try{
-			option = Integer.parseInt(System.console().readLine().trim());
+			if(System.console()!=null) option = Integer.parseInt(System.console().readLine().trim());
+			else {System.err.printf("%nSystem console missing.%n*This may have been caused by an attempt to redirect output when passing only one .dem file");System.exit(-1);}
+				
 			if(option<0 || option>limit){
 				System.err.printf("Input must be a number between 0 and %d%n", limit);
 				option = getOption(limit);
@@ -272,6 +270,7 @@ public class Handler{
 		heroName = "Invoker"; 		heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
 		heroName = "Shadow Shaman"; heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
 		heroName = "Lone Druid"; 	heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
+		heroName = "Undying"; 		heroIndex = heroList.get(heroName); if(heroIndex!=null) specialCaseHeroes.put(heroName, players.get(heroIndex));
 		/*		
 		for(Map.Entry<String, Short> hero: heroList.entrySet())	
 			if(heroList.get(hero.getKey())!=null){
@@ -308,6 +307,7 @@ public class Handler{
 		if(attackerName.contains("Forged Spirit")) 		return specialCaseHeroes.get("Invoker");
 		if(attackerName.contains("Shaman Ward")) 		return specialCaseHeroes.get("Shadow Shaman");
 		if(attackerName.contains("Druid Bear")) 		return specialCaseHeroes.get("Lone Druid");
+		if(attackerName.contains("Undying Zombie")) 	return specialCaseHeroes.get("Undying");
 
 		return null;
 	}
@@ -319,7 +319,7 @@ public class Handler{
 		final HashMap<Short, Player> players = demoDump.getPlayers();
 		final Player[] teams = demoDump.getTeams();
 		final HashMap<Short, String> modifierList = demoDump.getModifierList();
-		//System.out.println(combatLogNames);
+		//		System.out.println(combatLogNames);
 
 		final int ASSIST_TLIMIT = 20;
 		final HashMap<String, Player> specialCaseHeroes = getSpecialCaseHeroes(players, heroList);
@@ -351,8 +351,9 @@ public class Handler{
 			boolean isNeutral = attackerName.contains("Neutral");
 			boolean isCreep = attackerName.contains("Creep") || attackerName.contains("Siege");
 			boolean isTower = attackerName.contains("Tower");
-
+			boolean isFountain = attackerName.contains("Fountain");
 			if(target!=null && attackerSource!=null) friendlyFire = attackerSource.team.equals(target.team);
+			boolean isAssist = !friendlyFire && !isCreep && !isTower && !isFountain;
 
 			switch(types[combatEvent.type]){
 			case DAMAGE: //if(attacker!=null && target!=null)heroTargets++; 
@@ -360,6 +361,8 @@ public class Handler{
 
 					if( attackerSource==null || (combatEvent.attackerIllusion && friendlyFire) ) //Morphling's illu's don't have him as source, unlike other heroes.
 						attackerSource =  findOwner(attackerName, combatEvent.attackerName, specialCaseHeroes);
+					//					if( attackerSource==null && attackerName.contains("Necronomicon")
+
 
 					if(attackerSource!=null){
 						friendlyFire = attackerSource.team.equals(target.team);
@@ -429,13 +432,13 @@ public class Handler{
 
 						if(attackerSource==null ||(combatEvent.attackerIllusion && friendlyFire))
 							attackerSource =  findOwner(attackerName, combatEvent.attackerName, specialCaseHeroes);
-						
+
 						if(attackerSource==null && combatEvent.playerId!=-1)
 							attackerSource =  teams[combatEvent.playerId];
 
 						if(attackerSource!=null){
 							friendlyFire = attackerSource.team.equals(target.team);
-							
+
 							if(target.damagedBy[attackerSource.slotID]==null && !friendlyFire){
 								boolean ks = false;
 								for(CombatEvent assistEvent : target.damagedBy){			
@@ -444,22 +447,22 @@ public class Handler{
 										break;
 									}								
 								}
-								if(ks) attackerSource.addAchievement(combatEvent, A.KS);
+								if(ks) attackerSource.addAchievement(combatEvent, Achievement.KS);
 							}
-														
+
 							if(friendlyFire){
 								//grant deny achievement or suicide
 								if(attackerSource.hero.equals(targetName))
-									attackerSource.addAchievement(combatEvent, A.SUICIDE);
+									attackerSource.addAchievement(combatEvent, Achievement.SUICIDE);
 								else
-									attackerSource.addAchievement(combatEvent, A.HERO_DENY);
+									attackerSource.addAchievement(combatEvent, Achievement.HERO_DENY);
 								//System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
 							}
 
 							//attacker.kills++;
 							target.damagedBy[attackerSource.slotID]=null;
 						}
-						else if(isTower || isCreep){ // || isFountain
+						else if(isTower || isCreep || isFountain){
 							int start, end, i = 0, assistsCount=0;
 							if(target.slotID < 5){ start=5; end=10;} else {start=0; end=5;}
 							for(int iAttacker=start; iAttacker<end; iAttacker++){
@@ -475,17 +478,18 @@ public class Handler{
 						}
 						else if(isNeutral){
 							target.damagedBy = new CombatEvent[10]; //No assists
-							target.addAchievement(combatEvent, A.NEUTRAL_KILL);
+							target.addAchievement(combatEvent, Achievement.NEUTRAL_KILL);
 						}
 						else if(attackerName.equals("Roshan"))
-							target.addAchievement(combatEvent, A.ROSHAN_KILL);
-						else if(attackerName.contains("Fountain"))
-							target.addAchievement(combatEvent, A.FOUNTAIN_KILL);
-						else//Some unit not yet accounted for
-							System.out.println(attackerName+" killed "+targetName+" at "+combatEvent.timeStamp/60);
+							target.addAchievement(combatEvent, Achievement.ROSHAN_KILL);
+						else if(isFountain)
+							target.addAchievement(combatEvent, Achievement.FOUNTAIN_KILL);
+						else{ //Some unit not yet accounted for
+//							System.out.println(attackerName+" killed "+targetName+" at "+combatEvent.timeStamp/60);
+						}
 
 
-						if(!friendlyFire && !isCreep && !isTower){
+						if(isAssist){
 							int start, end;
 							if(target.slotID < 5){ start=5; end=10;} else {start=0; end=5;}
 							for(int iAttacker=start; iAttacker<end; iAttacker++){
@@ -493,8 +497,8 @@ public class Handler{
 									CombatEvent assitEvent = target.damagedBy[iAttacker];
 									if(combatEvent.timeStamp - assitEvent.timeStamp <= ASSIST_TLIMIT){
 										teams[iAttacker].addAssist(assitEvent);
-										//if(teams[iAttacker].hero.equals("Shadow Demon"))
-										//		System.out.println(attackerName+" -> "+combatLogNames.get(combatEvent.targetName)+" at "+combatEvent.timeStamp/60);
+										//										if(teams[iAttacker].hero.equals("Lina"))
+										//												System.out.println(combatEvent);
 									}
 								}
 							}
@@ -505,7 +509,7 @@ public class Handler{
 							lastDamagedBy[attackerSource.slotID] = combatEvent;
 							skLastDeath = combatEvent;
 						}
-						if(skRessurection && !friendlyFire && !isCreep && !isTower){
+						if(skRessurection && isAssist){
 							//							target.deaths--;
 							//							attacker.kills--;
 
@@ -526,9 +530,9 @@ public class Handler{
 
 				}
 				else if(targetName.contains("Fort") && attackerSource!=null)
-					attackerSource.addAchievement(combatEvent, A.THRONE_LH);
+					attackerSource.addAchievement(combatEvent, Achievement.THRONE_LH);
 				else if(targetName.equals("Roshan") && attackerSource!=null)
-					attackerSource.addAchievement(combatEvent, A.ROSHAN_LH);
+					attackerSource.addAchievement(combatEvent, Achievement.ROSHAN_LH);
 				break;
 			case AEGIS:
 				combatEvent.fmtLogStr("", teams[combatEvent.playerId].hero, "Aegis");
